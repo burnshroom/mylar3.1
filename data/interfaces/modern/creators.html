@@ -1,0 +1,586 @@
+<%!
+    import html
+%>
+<%inherit file="base.html"/>
+<%
+    import mylar
+%>
+
+<%def name="body()">
+    <input type="hidden" id="page_name" value="creators" />
+
+    <style>
+        .creator-nav-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--color-border, #292c37);
+            padding-bottom: 12px;
+        }
+
+        .creator-nav-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: var(--radius-md, 8px);
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--color-text-secondary, #9ea3b5);
+            text-decoration: none;
+            background: transparent;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .creator-nav-tab:hover {
+            color: var(--color-text, #f0f1f5);
+            background: var(--color-surface-elevated, #1e2027);
+        }
+
+        .creator-nav-tab.active {
+            color: #fff;
+            background: var(--color-accent, #e04652);
+            border-color: var(--color-accent, #e04652);
+        }
+
+        .creator-catalog-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .creator-catalog-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin: 0 0 4px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .creator-catalog-subtitle {
+            font-size: 13px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin: 0;
+        }
+
+        .creator-stats-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .creator-stat-pill {
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            padding: 8px 14px;
+            font-size: 12.5px;
+            color: var(--color-text-secondary, #9ea3b5);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .creator-stat-pill strong {
+            color: var(--color-text, #f0f1f5);
+            font-weight: 700;
+        }
+
+        .creator-toolbar {
+            background: var(--color-surface, #17181e);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-lg, 12px);
+            padding: 14px 18px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .creator-search-field {
+            position: relative;
+            flex: 1 1 240px;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .creator-search-field input {
+            width: 100%;
+            height: 38px;
+            padding: 8px 12px 8px 34px;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            color: var(--color-text, #f0f1f5);
+            font-size: 13px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.15s ease;
+        }
+
+        .creator-search-field input:focus {
+            border-color: var(--color-accent, #e04652);
+        }
+
+        .creator-search-icon {
+            position: absolute;
+            left: 11px;
+            top: 12px;
+            color: var(--color-text-muted, #6c7184);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .creator-filter-select {
+            padding: 8px 14px;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            color: var(--color-text, #f0f1f5);
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .creator-filter-select:focus {
+            border-color: var(--color-accent, #e04652);
+        }
+
+        .creator-btn-filter {
+            padding: 8px 16px;
+            background: var(--color-accent, #e04652);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md, 8px);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .creator-btn-filter:hover {
+            background: var(--color-accent-hover, #f05562);
+        }
+
+        .creator-btn-reset {
+            padding: 8px 14px;
+            background: transparent;
+            color: var(--color-text-secondary, #9ea3b5);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+
+        .creator-btn-reset:hover {
+            color: var(--color-text, #f0f1f5);
+            border-color: var(--color-border-hover, #3c4050);
+        }
+
+        /* ─── CREATOR CARDS GRID ─── */
+        .creator-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .creator-card {
+            background: var(--color-surface, #17181e);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-lg, 12px);
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .creator-card:hover {
+            border-color: var(--color-border-hover, #3c4050);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        .creator-card-header {
+            margin-bottom: 12px;
+        }
+
+        .creator-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin: 0 0 6px 0;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .creator-slug-text {
+            font-family: var(--font-mono, monospace);
+            font-size: 11px;
+            color: var(--color-text-muted, #6c7184);
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .creator-badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+
+        .badge-res {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: var(--radius-pill, 9999px);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .badge-res-unresolved {
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.25);
+        }
+
+        .badge-res-confirmed {
+            background: rgba(168, 85, 247, 0.12);
+            color: #c084fc;
+            border: 1px solid rgba(168, 85, 247, 0.25);
+        }
+
+        .badge-role {
+            background: var(--color-surface-elevated, #1e2027);
+            color: var(--color-text-secondary, #9ea3b5);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: 4px;
+            padding: 2px 7px;
+            font-size: 11px;
+            text-transform: capitalize;
+        }
+
+        .creator-card-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border-subtle, #1f212a);
+            border-radius: var(--radius-md, 8px);
+            padding: 10px;
+            text-align: center;
+            margin-bottom: 14px;
+        }
+
+        .creator-metric-item .val {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+        }
+
+        .creator-metric-item .lbl {
+            font-size: 10.5px;
+            color: var(--color-text-muted, #6c7184);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .creator-card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 10px;
+            border-top: 1px solid var(--color-border-subtle, #1f212a);
+            font-size: 11.5px;
+            color: var(--color-text-muted, #6c7184);
+        }
+
+        .creator-view-link {
+            color: var(--color-accent, #e04652);
+            font-weight: 600;
+            font-size: 12.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .creator-card:hover .creator-view-link {
+            color: var(--color-accent-hover, #f05562);
+        }
+
+        /* ─── PAGINATION ─── */
+        .creator-pagination {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 14px 0;
+            border-top: 1px solid var(--color-border, #292c37);
+        }
+
+        .creator-page-nav {
+            display: flex;
+            gap: 6px;
+        }
+
+        .page-btn {
+            padding: 6px 12px;
+            background: var(--color-surface, #17181e);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            color: var(--color-text-secondary, #9ea3b5);
+            font-size: 12.5px;
+            text-decoration: none;
+            transition: all 0.12s ease;
+        }
+
+        .page-btn:hover:not(.disabled) {
+            background: var(--color-surface-hover, #252731);
+            color: var(--color-text, #f0f1f5);
+            border-color: var(--color-border-hover, #3c4050);
+        }
+
+        .page-btn.active {
+            background: var(--color-accent, #e04652);
+            border-color: var(--color-accent, #e04652);
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .page-btn.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* ─── EMPTY STATE ─── */
+        .creator-empty-card {
+            background: var(--color-surface, #17181e);
+            border: 1px dashed var(--color-border, #292c37);
+            border-radius: var(--radius-lg, 12px);
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin: 20px 0;
+        }
+
+        .creator-empty-card h3 {
+            color: var(--color-text, #f0f1f5);
+            font-size: 18px;
+            margin: 12px 0 6px 0;
+        }
+
+        .creator-empty-card p {
+            max-width: 480px;
+            margin: 0 auto 16px auto;
+            font-size: 13.5px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 600px) {
+            .creator-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 12px;
+            }
+            .creator-search-field {
+                width: 100%;
+                flex: none;
+            }
+            .creator-filter-select, .creator-btn-filter, .creator-btn-reset {
+                width: 100%;
+                box-sizing: border-box;
+            }
+            .creator-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <div class="content-header">
+        <div class="creator-nav-tabs">
+            <a href="creators" class="creator-nav-tab active">
+                <i class="fa fa-users"></i> Credits Catalog
+            </a>
+            <a href="creator_registry" class="creator-nav-tab">
+                <i class="fa fa-id-card-o"></i> Identity Registry
+            </a>
+        </div>
+
+        <div class="creator-catalog-header">
+            <div>
+                <h1 class="creator-catalog-title">Creator Credits</h1>
+                <p class="creator-catalog-subtitle">Locally indexed comic creator credits from ComicInfo.xml metadata</p>
+            </div>
+        </div>
+
+        <div class="creator-stats-bar">
+            <div class="creator-stat-pill">
+                <span>Observed Names:</span>
+                <strong>${catalog['total_observed_names']}</strong>
+            </div>
+            <div class="creator-stat-pill">
+                <span>Indexed Credits:</span>
+                <strong>${catalog['total_indexed_credits']}</strong>
+            </div>
+            %if catalog['search'] or catalog['role']:
+                <div class="creator-stat-pill" style="border-color: rgba(224, 70, 82, 0.4); background: rgba(224, 70, 82, 0.08);">
+                    <span>Matching Filter:</span>
+                    <strong>${catalog['total_matching']}</strong>
+                </div>
+            %endif
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <form method="get" action="creators" class="creator-toolbar">
+            <div class="creator-search-field">
+                <svg class="creator-search-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="7" cy="7" r="4.5"></circle>
+                    <path d="M10.5 10.5L14 14"></path>
+                </svg>
+                <input type="text" name="search" value="${catalog['search']}" placeholder="Search raw creator name..." autocomplete="off" />
+            </div>
+
+            <select name="role" class="creator-filter-select" aria-label="Filter by Role">
+                <option value="">All Roles</option>
+                %for r in roles:
+                    <option value="${r}" ${'selected="selected"' if catalog['role'] == r else ''}>${r.replace('_', ' ').title()}</option>
+                %endfor
+            </select>
+
+            <select name="sort" class="creator-filter-select" aria-label="Sort Order">
+                <option value="name_asc" ${'selected="selected"' if catalog['sort'] == 'name_asc' else ''}>Name (A–Z)</option>
+                <option value="name_desc" ${'selected="selected"' if catalog['sort'] == 'name_desc' else ''}>Name (Z–A)</option>
+                <option value="credits_desc" ${'selected="selected"' if catalog['sort'] == 'credits_desc' else ''}>Most Credits</option>
+                <option value="issues_desc" ${'selected="selected"' if catalog['sort'] == 'issues_desc' else ''}>Most Issues</option>
+                <option value="series_desc" ${'selected="selected"' if catalog['sort'] == 'series_desc' else ''}>Most Series</option>
+            </select>
+
+            <button type="submit" class="creator-btn-filter">Filter</button>
+            %if catalog['search'] or catalog['role'] or catalog['sort'] != 'name_asc':
+                <a href="creators" class="creator-btn-reset">Reset</a>
+            %endif
+        </form>
+    </div>
+
+    <div class="content-body">
+        %if not catalog['creators']:
+            <div class="creator-empty-card">
+                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--color-text-muted);">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                %if catalog['search'] or catalog['role']:
+                    <h3>No Matching Creator Credits</h3>
+                    <p>No observed creator records match your current search and role filters.</p>
+                    <a href="creators" class="creator-btn-filter" style="display: inline-block; text-decoration: none;">Clear Filters</a>
+                %else:
+                    <h3>No Creator Credits Indexed Yet</h3>
+                    <p>Open any series details page in your library and click <strong>Index Creators</strong> to scan local ComicInfo.xml metadata.</p>
+                    <a href="home" class="creator-btn-filter" style="display: inline-block; text-decoration: none;">Go to Library</a>
+                %endif
+            </div>
+        %else:
+            <div class="creator-grid">
+                %for c in catalog['creators']:
+                    <a href="creator_detail?NameRecordID=${c['name_record_id']}" class="creator-card">
+                        <div class="creator-card-header">
+                            <h2 class="creator-name">${html.escape(c['raw_name'])}</h2>
+                            <div class="creator-slug-text">slug: ${html.escape(c['name_slug'])}</div>
+
+                            <div class="creator-badge-row">
+                                %if c['is_resolved']:
+                                    <span class="badge-res badge-res-confirmed" title="Linked to confirmed entity">
+                                        Confirmed: ${html.escape(c['confirmed_entity_name'] or '')}
+                                    </span>
+                                %else:
+                                    <span class="badge-res badge-res-unresolved" title="Observed local credit from ComicInfo.xml">
+                                        Local indexed credit
+                                    </span>
+                                %endif
+
+                                %for r in c['roles'][:4]:
+                                    <span class="badge-role">${r.replace('_', ' ')}</span>
+                                %endfor
+                                %if len(c['roles']) > 4:
+                                    <span class="badge-role">+${len(c['roles']) - 4}</span>
+                                %endif
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="creator-card-metrics">
+                                <div class="creator-metric-item">
+                                    <div class="val">${c['credit_count']}</div>
+                                    <div class="lbl">Credits</div>
+                                </div>
+                                <div class="creator-metric-item">
+                                    <div class="val">${c['issue_count']}</div>
+                                    <div class="lbl">Issues</div>
+                                </div>
+                                <div class="creator-metric-item">
+                                    <div class="val">${c['series_count']}</div>
+                                    <div class="lbl">Series</div>
+                                </div>
+                            </div>
+
+                            <div class="creator-card-footer">
+                                <span>Source: ComicInfo.xml</span>
+                                <span class="creator-view-link">View credits &rarr;</span>
+                            </div>
+                        </div>
+                    </a>
+                %endfor
+            </div>
+
+            <!-- Pagination Bar -->
+            %if catalog['total_pages'] > 1:
+                <div class="creator-pagination">
+                    <div style="font-size: 13px; color: var(--color-text-secondary);">
+                        Showing page <strong>${catalog['page']}</strong> of <strong>${catalog['total_pages']}</strong> (${catalog['total_matching']} total)
+                    </div>
+
+                    <div class="creator-page-nav">
+                        <%
+                            base_qs = f"search={catalog['search']}&role={catalog['role']}&sort={catalog['sort']}"
+                        %>
+                        %if catalog['has_prev']:
+                            <a href="creators?${base_qs}&page=${catalog['page'] - 1}" class="page-btn">&laquo; Prev</a>
+                        %else:
+                            <span class="page-btn disabled">&laquo; Prev</span>
+                        %endif
+
+                        <%
+                            start_p = max(1, catalog['page'] - 2)
+                            end_p = min(catalog['total_pages'], catalog['page'] + 2)
+                        %>
+                        %for p in range(start_p, end_p + 1):
+                            <a href="creators?${base_qs}&page=${p}" class="page-btn ${'active' if p == catalog['page'] else ''}">${p}</a>
+                        %endfor
+
+                        %if catalog['has_next']:
+                            <a href="creators?${base_qs}&page=${catalog['page'] + 1}" class="page-btn">Next &raquo;</a>
+                        %else:
+                            <span class="page-btn disabled">Next &raquo;</span>
+                        %endif
+                    </div>
+                </div>
+            %endif
+        %endif
+    </div>
+</%def>

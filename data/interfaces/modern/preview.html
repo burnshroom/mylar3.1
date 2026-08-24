@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mylar3 Modern Theme Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Oswald:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #0f0f13;
+    --surface-color: #1a1a23;
+    --surface-raised: #22222e;
+    --border-color: #2e2e3d;
+    --text-primary: #e8e8f0;
+    --text-muted: #8888a0;
+    --accent-color: #e63946;
+    --success-color: #2dc653;
+    --warning-color: #f4a261;
+    
+    --font-body: 'Inter', sans-serif;
+    --font-heading: 'Oswald', sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    background-color: var(--surface-color);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    padding: 24px 20px;
+    font-family: var(--font-heading);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .logo-mylar {
+    color: var(--accent-color);
+  }
+
+  .logo-3 {
+    color: var(--text-muted);
+  }
+
+  .nav-menu {
+    list-style: none;
+    flex: 1;
+    padding: 0 10px;
+  }
+
+  .nav-item {
+    margin-bottom: 4px;
+  }
+
+  .nav-link {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+
+  .nav-link:hover {
+    background-color: var(--surface-raised);
+  }
+
+  .nav-link.active {
+    background-color: var(--accent-color);
+    color: white;
+  }
+
+  .nav-icon {
+    margin-right: 12px;
+    font-size: 16px;
+  }
+
+  .nav-divider {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 16px 14px;
+  }
+
+  .sidebar-bottom {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .status-indicators {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+  }
+
+  .dot-green {
+    color: var(--success-color);
+  }
+
+  .dot-red {
+    color: var(--accent-color);
+  }
+
+  /* Main Content */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 32px 40px;
+  }
+
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-family: var(--font-heading);
+    font-size: 32px;
+    font-weight: 500;
+  }
+
+  .filter-chips {
+    display: flex;
+    gap: 12px;
+  }
+
+  .chip {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    transition: all 0.2s;
+  }
+
+  .chip:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+  }
+
+  .chip.active {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+    color: white;
+  }
+
+  .search-container {
+    margin-bottom: 32px;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 14px 20px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: var(--font-body);
+  }
+
+  .search-input:focus {
+    border-color: var(--accent-color);
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .comic-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+
+  .comic-card {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .comic-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+    border-color: var(--surface-raised);
+  }
+
+  .cover-placeholder {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+  }
+  
+  /* Different gradients for covers */
+  .cover-1 { background: linear-gradient(135deg, #2b4162 0%, #fa9c7a 100%); }
+  .cover-2 { background: linear-gradient(135deg, #b0101b 0%, #1e3c72 100%); }
+  .cover-3 { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+  .cover-4 { background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%); }
+  .cover-5 { background: linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%); }
+  .cover-6 { background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%); }
+  .cover-7 { background: linear-gradient(135deg, #1f4037 0%, #99f2c8 100%); }
+  .cover-8 { background: linear-gradient(135deg, #f12711 0%, #f5af19 100%); }
+  .cover-9 { background: linear-gradient(135deg, #654ea3 0%, #eaafc8 100%); }
+  .cover-10 { background: linear-gradient(135deg, #000000 0%, #434343 100%); }
+  .cover-11 { background: linear-gradient(135deg, #e52d27 0%, #b31217 100%); }
+  .cover-12 { background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); }
+
+  .card-content {
+    padding: 14px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .series-title {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .publisher {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: auto;
+  }
+
+  .status-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .status-downloaded {
+    background-color: rgba(45, 198, 83, 0.15);
+    color: var(--success-color);
+  }
+
+  .status-wanted {
+    background-color: rgba(230, 57, 70, 0.15);
+    color: var(--accent-color);
+  }
+
+  .status-snatched {
+    background-color: rgba(244, 162, 97, 0.15);
+    color: var(--warning-color);
+  }
+
+  .issue-count {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* Responsive tweaks */
+  @media (max-width: 1200px) {
+    .comic-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .comic-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="logo-mylar">MYLAR</span><span class="logo-3">3</span>
+    </div>
+
+    <ul class="nav-menu">
+      <li class="nav-item"><a href="#" class="nav-link active"><span class="nav-icon">🏠</span> Library</a></li>
+      <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📅</span> This Week</a></li>
+      <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔍</span> Queue</a></li>
+      <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">⏱</span> History</a></li>
+      
+      <li class="nav-divider"></li>
+      
+      <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📂</span> Import</a></li>
+      <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔧</span> Manage</a></li>
+      <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">⚙</span> Settings</a></li>
+    </ul>
+
+    <div class="sidebar-bottom">
+      <div>v0.6.1</div>
+      <div class="status-indicators">
+        <span>CV <span class="dot-green">●</span></span>
+        <span>TH <span class="dot-red">●</span></span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    
+    <div class="top-bar">
+      <h1 class="page-title">My Library</h1>
+      <div class="filter-chips">
+        <div class="chip active">All</div>
+        <div class="chip">Marvel</div>
+        <div class="chip">DC</div>
+        <div class="chip">Image</div>
+        <div class="chip">BOOM!</div>
+        <div class="chip">IDW</div>
+      </div>
+    </div>
+
+    <div class="search-container">
+      <input type="text" class="search-input" placeholder="Search series...">
+    </div>
+
+    <div class="comic-grid">
+      <!-- Card 1 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-1"></div>
+        <div class="card-content">
+          <div class="series-title">Batman (1940)</div>
+          <div class="publisher">DC</div>
+          <div class="card-footer">
+            <span class="status-badge status-downloaded">Downloaded</span>
+            <span class="issue-count">98/142 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-2"></div>
+        <div class="card-content">
+          <div class="series-title">Amazing Spider-Man (1963)</div>
+          <div class="publisher">Marvel</div>
+          <div class="card-footer">
+            <span class="status-badge status-downloaded">Downloaded</span>
+            <span class="issue-count">67/441 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-3"></div>
+        <div class="card-content">
+          <div class="series-title">Saga</div>
+          <div class="publisher">Image</div>
+          <div class="card-footer">
+            <span class="status-badge status-wanted">Wanted</span>
+            <span class="issue-count">12/60 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-4"></div>
+        <div class="card-content">
+          <div class="series-title">X-Men (1991)</div>
+          <div class="publisher">Marvel</div>
+          <div class="card-footer">
+            <span class="status-badge status-snatched">Snatched</span>
+            <span class="issue-count">34/113 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-5"></div>
+        <div class="card-content">
+          <div class="series-title">Hellboy</div>
+          <div class="publisher">Dark Horse</div>
+          <div class="card-footer">
+            <span class="status-badge status-downloaded">Downloaded</span>
+            <span class="issue-count">22/22 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 6 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-6"></div>
+        <div class="card-content">
+          <div class="series-title">The Walking Dead</div>
+          <div class="publisher">Image</div>
+          <div class="card-footer">
+            <span class="status-badge status-downloaded">Downloaded</span>
+            <span class="issue-count">193/193 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 7 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-7"></div>
+        <div class="card-content">
+          <div class="series-title">Invincible</div>
+          <div class="publisher">Image</div>
+          <div class="card-footer">
+            <span class="status-badge status-wanted">Wanted</span>
+            <span class="issue-count">8/144 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 8 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-8"></div>
+        <div class="card-content">
+          <div class="series-title">Detective Comics (1937)</div>
+          <div class="publisher">DC</div>
+          <div class="card-footer">
+            <span class="status-badge status-downloaded">Downloaded</span>
+            <span class="issue-count">15/1027 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 9 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-9"></div>
+        <div class="card-content">
+          <div class="series-title">Black Panther (2016)</div>
+          <div class="publisher">Marvel</div>
+          <div class="card-footer">
+            <span class="status-badge status-snatched">Snatched</span>
+            <span class="issue-count">6/18 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 10 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-10"></div>
+        <div class="card-content">
+          <div class="series-title">Monstress</div>
+          <div class="publisher">Image</div>
+          <div class="card-footer">
+            <span class="status-badge status-wanted">Wanted</span>
+            <span class="issue-count">3/52 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 11 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-11"></div>
+        <div class="card-content">
+          <div class="series-title">Preacher</div>
+          <div class="publisher">DC/Vertigo</div>
+          <div class="card-footer">
+            <span class="status-badge status-downloaded">Downloaded</span>
+            <span class="issue-count">66/66 issues</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 12 -->
+      <div class="comic-card">
+        <div class="cover-placeholder cover-12"></div>
+        <div class="card-content">
+          <div class="series-title">Klaus</div>
+          <div class="publisher">BOOM!</div>
+          <div class="card-footer">
+            <span class="status-badge status-downloaded">Downloaded</span>
+            <span class="issue-count">7/11 issues</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</body>
+</html>

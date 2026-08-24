@@ -1,0 +1,987 @@
+<%
+	import os
+	import mylar
+	try:
+		css_path = os.path.join(mylar.PROG_DIR, 'data', 'interfaces', interface, 'css', 'style.css')
+		asset_v = f"{mylar.CURRENT_VERSION or '1'}_{int(os.path.getmtime(css_path))}"
+	except Exception:
+		asset_v = mylar.CURRENT_VERSION or '1'
+%>
+<!doctype html>
+<!--[if lt IE 7 ]> <html lang="en" class="no-js ie6"> <![endif]-->
+<!--[if IE 7 ]>    <html lang="en" class="no-js ie7"> <![endif]-->
+<!--[if IE 8 ]>    <html lang="en" class="no-js ie8"> <![endif]-->
+<!--[if IE 9 ]>    <html lang="en" class="no-js ie9"> <![endif]-->
+<!--[if (gt IE 9)|!(IE)]><!--> <html lang="en" class="no-js"> <!--<![endif]-->
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+	
+	<title>Mylar ${f'- {mylar.CONFIG.INSTANCE_NAME} ' if mylar.CONFIG.INSTANCE_NAME else ''}- ${title}</title>
+	<meta name="description" content="Mylar 'modern' interface" />
+	<meta name="author" content="Mylar" />
+	
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	
+	<link rel="apple-touch-icon" href="images/mylarlogo.png" />
+        <link rel="stylesheet" type="text/css" href="interfaces/${interface}/css/style.css?v=${asset_v}" />
+	<link rel="stylesheet" href="interfaces/${interface}/css/jquery-ui.css">
+	<link rel="icon" href="images/favicon.ico" type="image/x-icon" />
+	<link rel="shortcut icon" href="images/favicon.ico" type="image/x-icon" />
+	${next.headIncludes()}
+	
+	<script src="js/libs/modernizr-2.8.3.min.js"></script>
+	<script src="js/libs/jquery-1.7.2.min.js"></script>
+</head>
+<body>
+        <%
+             mylar.DONATEBUTTON = True
+        %>
+        <div id="wrapper">
+            <div id="sidebar-overlay" class="sidebar-overlay"></div>
+            <header class="mobile-header">
+                <button id="sidebarToggle" class="mobile-toggle" aria-label="Toggle Navigation" type="button">
+                    <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <line x1="3" y1="5" x2="17" y2="5"></line>
+                        <line x1="3" y1="10" x2="17" y2="10"></line>
+                        <line x1="3" y1="15" x2="17" y2="15"></line>
+                    </svg>
+                </button>
+                <div class="mobile-brand">
+                    <a href="home"><img src="images/mylarlogo.png" alt="mylar" height="24" /></a>
+                </div>
+                <div class="mobile-actions">
+                    <a id="mobile_notifs" title="Notifications" href="javascript:void(0)" onclick="manageNotifications()"><img src="images/notif.png" height="20" width="16" alt="Notifs" /></a>
+                </div>
+            </header>
+
+            <aside id="sidebar">
+                <div id="logo">
+                    <a href="home" class="logo-link">
+                        <img class="mylarload" src="images/mylarlogo.png" alt="mylar" />
+                        <span class="logo-badge">MODERN</span>
+                    </a>
+                </div>
+
+                <div id="searchbar">
+                    <form action="searchit" method="get" class="search-form">
+                        <div class="search-field">
+                            <svg class="search-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="7" cy="7" r="4.5"></circle>
+                                <path d="M10.5 10.5L14 14"></path>
+                            </svg>
+                            <input type="text" name="name" placeholder="Search series..." autocomplete="off" />
+                            <kbd class="search-kbd" title="Press '/' to search">/</kbd>
+                        </div>
+                    </form>
+                </div>
+                
+                <div id="nav">
+                    <div class="nav-group">
+                        <div class="nav-group-title">Library</div>
+                        <a href="home" class="nav-item" data-nav="home">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 3.5A1.5 1.5 0 0 1 4.5 2h9A1.5 1.5 0 0 1 15 3.5v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 3 14.5v-11z"></path>
+                                <path d="M6 2v14"></path>
+                            </svg>
+                            <span class="nav-label">Library</span>
+                        </a>
+                        <a href="pullist" class="nav-item" data-nav="pullist">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2.5" y="3.5" width="13" height="12" rx="2"></rect>
+                                <path d="M12.5 1.5v3M5.5 1.5v3M2.5 7.5h13"></path>
+                            </svg>
+                            <span class="nav-label">This Week</span>
+                            %if mylar.PULLNEW == 'no':
+                              <span class="nav-indicator nav-indicator--idle" title="No new pulls"></span>
+                            %else:
+                              <span class="nav-indicator nav-indicator--new" title="New pull list available"></span>
+                            %endif
+                        </a>
+                        %if mylar.WANTED_TAB_OFF:
+                            <a href="#" class="nav-item nav-item--disabled" data-nav="upcoming">
+                                <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h8"></path>
+                                </svg>
+                                <span class="nav-label">Queue</span>
+                            </a>
+                        %else:
+                            <a href="upcoming" class="nav-item" data-nav="upcoming">
+                                <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h8"></path>
+                                </svg>
+                                <span class="nav-label">Queue</span>
+                            </a>
+                        %endif
+                        <a href="history" class="nav-item" data-nav="history">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="9" cy="9" r="6.5"></circle>
+                                <path d="M9 5.5V9l2.5 1.5"></path>
+                            </svg>
+                            <span class="nav-label">History</span>
+                        </a>
+                        <a href="storyarc_main" class="nav-item" data-nav="storyarcs">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3.5 2.5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-12a1 1 0 0 1 1-1z"></path>
+                                <path d="M6 2.5v14"></path>
+                                <path d="M9 6h4M9 9h4M9 12h3"></path>
+                            </svg>
+                            <span class="nav-label">Story Arcs</span>
+                        </a>
+                        <a href="creators" class="nav-item" data-nav="creators">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12.5 15.5v-1a3 3 0 0 0-3-3h-3a3 3 0 0 0-3 3v1"></path>
+                                <circle cx="8" cy="5.5" r="2.5"></circle>
+                                <path d="M15.5 15.5v-1a2.5 2.5 0 0 0-2-2.45"></path>
+                                <path d="M12 3.1a2.5 2.5 0 0 1 0 4.8"></path>
+                            </svg>
+                            <span class="nav-label">Creators</span>
+                        </a>
+                    </div>
+
+                    <div class="nav-group">
+                        <div class="nav-group-title">Workspace</div>
+                        <a href="manage" class="nav-item" data-nav="manage">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h3.5l1.5 2H14a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 14 15H4a1.5 1.5 0 0 1-1.5-1.5v-9z"></path>
+                                <path d="M9 8.5v4M7 10.5h4"></path>
+                            </svg>
+                            <span class="nav-label">Import</span>
+                        </a>
+                        <a href="manageComics" class="nav-item" data-nav="manageComics">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2.5" y="2.5" width="5.5" height="5.5" rx="1"></rect>
+                                <rect x="10" y="2.5" width="5.5" height="5.5" rx="1"></rect>
+                                <rect x="2.5" y="10" width="5.5" height="5.5" rx="1"></rect>
+                                <rect x="10" y="10" width="5.5" height="5.5" rx="1"></rect>
+                            </svg>
+                            <span class="nav-label">Manage</span>
+                        </a>
+                        <a href="config" class="nav-item config" data-nav="config">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="9" cy="9" r="2.5"></circle>
+                                <path d="M14.5 9a5.5 5.5 0 0 0-.1-1l1.5-1.2-1.4-2.4-1.8.7a5.7 5.7 0 0 0-1.7-1l-.3-1.9H7.8l-.3 1.9a5.7 5.7 0 0 0-1.7 1l-1.8-.7-1.4 2.4 1.5 1.2a5.5 5.5 0 0 0 0 2l-1.5 1.2 1.4 2.4 1.8-.7a5.7 5.7 0 0 0 1.7 1l.3 1.9h2.8l.3-1.9a5.7 5.7 0 0 0 1.7-1l1.8.7 1.4-2.4-1.5-1.2c.1-.3.1-.7.1-1z"></path>
+                            </svg>
+                            <span class="nav-label">Settings</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="sidebar-bottom">
+                    <div id="backendstatus" class="sidebar-status">
+                        <div class="status-group">
+                            <span class="status-heading">Services</span>
+                            <div class="status-badges">
+                                <span class="status-badge %if mylar.BACKENDSTATUS_CV == 'up':status-badge--up%else:status-badge--down%endif" title="ComicVine API: ${mylar.BACKENDSTATUS_CV}" aria-label="ComicVine API: ${mylar.BACKENDSTATUS_CV}">
+                                    <span class="status-dot"></span>CV
+                                </span>
+                                <span class="status-badge %if mylar.BACKENDSTATUS_WS == 'up':status-badge--up%else:status-badge--down%endif" title="TalkHard: ${mylar.BACKENDSTATUS_WS}" aria-label="TalkHard: ${mylar.BACKENDSTATUS_WS}">
+                                    <span class="status-dot"></span>TH
+                                </span>
+                            </div>
+                        </div>
+
+                        <%
+                            mylar.PROVIDER_STATUS = {}
+                            prov_fail = False
+                            total_provs = 0
+                            up_provs = 0
+                            prov_details = []
+                            try:
+                                for ko, vo in sorted(mylar.CONFIG.PROVIDER_ORDER.items()):
+                                    status = 'success'
+                                    for kb in mylar.PROVIDER_BLOCKLIST:
+                                        if vo == kb['site']:
+                                            status = 'fail'
+                                            break
+                                    mylar.PROVIDER_STATUS[vo] = status
+                                    total_provs += 1
+                                    if status == 'success':
+                                        up_provs += 1
+                                    prov_name = vo[:12] if len(vo) > 12 else vo
+                                    prov_details.append(f"{prov_name}: {status.upper()}")
+                            except Exception:
+                                prov_fail = True
+                            
+                            prov_tooltip = ", ".join(prov_details) if prov_details else "No providers configured"
+                        %>
+                        <div class="status-group providers-group">
+                            <span class="status-heading">Providers</span>
+                            <div class="status-badges">
+                                %if prov_fail:
+                                    <span class="status-badge status-badge--warn" title="Unable to determine Provider Status at this time">
+                                        <span class="status-dot"></span>N/A
+                                    </span>
+                                %elif total_provs == 0:
+                                    <span class="status-badge status-badge--idle" title="No providers configured">
+                                        <span class="status-dot"></span>0 Online
+                                    </span>
+                                %elif up_provs == total_provs:
+                                    <span class="status-badge status-badge--up" title="${prov_tooltip}">
+                                        <span class="status-dot"></span>${up_provs}/${total_provs} Online
+                                    </span>
+                                %elif up_provs > 0:
+                                    <span class="status-badge status-badge--warn" title="${prov_tooltip}">
+                                        <span class="status-dot"></span>${up_provs}/${total_provs} Online
+                                    </span>
+                                %else:
+                                    <span class="status-badge status-badge--down" title="${prov_tooltip}">
+                                        <span class="status-dot"></span>0/${total_provs} Online
+                                    </span>
+                                %endif
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="version" class="sidebar-version" title="${mylar.CURRENT_VERSION_NAME or mylar.CURRENT_VERSION} (${mylar.CONFIG.GIT_BRANCH})">
+                        <%
+                            raw_ver = str(mylar.CURRENT_VERSION_NAME or mylar.CURRENT_VERSION or "v0.7.5")
+                            if len(raw_ver) > 10 and not raw_ver.startswith("v"):
+                                ver_display = raw_ver[:7]
+                            else:
+                                ver_display = raw_ver
+
+                            raw_branch = str(mylar.CONFIG.GIT_BRANCH or "master")
+                            if len(raw_branch) > 12:
+                                branch_display = raw_branch[:7]
+                            else:
+                                branch_display = raw_branch
+                        %>
+                        <span class="version-number">${ver_display}</span>
+                        <span class="version-branch">(${branch_display})</span>
+                    </div>
+                    
+                    <div id="actions" class="sidebar-actions">
+                        <a href="shutdown" class="action-btn" title="Shutdown"><span class="ui-button-icon-primary ui-icon ui-icon-power"></span>Shutdown</a>
+                        <span class="action-divider">|</span>
+                        <a href="restart" class="action-btn" title="Restart"><span class="ui-button-icon-primary ui-icon ui-icon-power"></span>Restart</a>
+                        %if mylar.CONFIG.AUTHENTICATION > 0:
+                            <span class="action-divider">|</span>
+                            <a href="auth/logout" class="action-btn" title="Logout"><span class="ui-button-icon-primary ui-icon ui-icon-power"></span>Logout</a>
+                            <% bottom_foot = "0;" %>
+                        %else:
+                            <% bottom_foot = "0;" %>
+                        %endif
+                    </div>
+                </div>
+            </aside>
+            
+            <div id="main-wrapper">
+                <div id="ajaxMsg" class="ajaxMsg"></div>
+                <div id="updatediv"></div>
+                <main id="main">
+                    <div id="subhead">
+                        ${next.headerIncludes()}
+                    </div>
+                    ${next.body()}
+                </main>
+                <footer class="app-footer">
+                    <div id="footer-actions" class="footer-section">
+                        <span id="testing"><a href="#" onclick="check_the_hub()"><span class="ui-icon ui-icon-refresh"></span><span id="version_line">Check for new version</span></a></span>
+                    </div>
+                    <div id="donate" class="footer-section footer-donate">
+                        %if mylar.DONATEBUTTON:
+                            <a href="config#donate"><img src="images/donate.png" height="22" width="105" alt="Donate"></a>
+                        %endif
+                    </div>
+                    
+                    <div id="config_messages_dialog" title="Configuration Warnings" style="display:none">
+                       <span id="mbody"></span>
+                    </div>
+                    <div class="footer-section footer-notifs">
+                        <a id="notifs" class="notif-trigger" title="View Latest Notifications" href="javascript:void(0)" onclick="manageNotifications()">
+                            <img src="images/notif.png" height="24" width="19" alt="Notifications" />
+                        </a>
+                        <div id="notifs_dialog" title="Notifications" style="display:none">
+                           <div id="btn_container">
+                               <div id="btn_notifs" style="float:right;padding-bottom:5px;margin-top:0px;">
+                                   <a id="menu_link_always" onclick="always_notifs()" href="#"><span id="always_the_notifs" title="Force notification display to be always on top" value="modal">Always on Top</span></a>
+                                   <a id="menu_link_edit" onclick="clear_notifs()" href="#"><span id="clear_notifs" title="Clear notifications for current session">Clear notifications</span></a>
+                                </div>
+                           </div>
+
+                           <div class="table_wrapper" id="notifs_wrapper">
+                            <table class="display_notifs" id="notifs_table">
+                                <thead>
+                                    <tr>
+                                        <th id="date">Date</th>
+                                        <th id="message">Message</th>
+                                        <th id="comicid">ComicID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>
+                           </div>
+                        </div>
+                    </div>
+                </footer>
+            </div>
+        </div>
+        
+        <script src="js/libs/jquery-ui.min.js"></script>
+        <script src="js/common.js"></script>
+	
+	${next.javascriptIncludes()}
+	
+	<script src="js/plugins.js"></script>
+	<script src="js/script.js"></script>
+	<!--[if lt IE 7 ]>
+	<script src="js/libs/dd_belatedpng.js"></script>
+	<script> DD_belatedPNG.fix('img, .png_bg');</script>
+	<![endif]-->
+        <script>
+        //var reconnectFrequencySeconds = 1;
+        //var evtSource;
+
+        // Putting these functions in extra variables is just for the sake of readability
+        //var waitFunc = function() { return reconnectFrequencySeconds * 1000 };
+        //var tryToSetupFunc = function() {
+        //    setupEventSource();
+        //    reconnectFrequencySeconds *= 2;
+        //    if (reconnectFrequencySeconds >= 64) {
+        //       reconnectFrequencySeconds = 64;
+        //    }
+        //};
+
+        //var reconnectFunc = function() { setTimeout(tryToSetupFunc, waitFunc()) };
+
+        //function setupEventSource() {
+        //    evtSource = new EventSource("api?cmd=checkGlobalMessages&apikey=4b4cb0507c4f6ca686480a3e8e17bd07") 
+        //    evtSource.onmessage = function(e) {
+        //        console.log(e);
+        //    };
+        //    evtSource.onopen = function(e) {
+        //        reconnectFrequencySeconds = 1;
+        //    };
+        //    evtSource.onerror = function(e) {
+        //        evtSource.close();
+        //        reconnectFunc();
+        //    };
+        //}
+
+        //setupEventSource();
+        var sse_key = "${sse_key}";
+        var api_line = "api?cmd=checkGlobalMessages&apikey="+sse_key;
+        const evtSource = new EventSource(api_line)
+
+        evtSource.addEventListener("shutdown", function(e){
+            console.log('shutting down....');
+            evtSource.close();
+        }, false);
+
+        evtSource.addEventListener("addbyid", function(e){
+            if (e.data){
+                var data = JSON.parse(e.data);
+                var cid = retrieve_comicid();
+                if (data.status == 'mid-message-event' && data.comicid == cid && document.getElementById("page_name").value == 'series_detail'){
+                    reload_tabs();
+                    if (data.comicname != null || data.comicname != 'None'){
+                        title_loadings(data.comicname, data.seriesyear, data.comicid, data.message);
+                    }
+                } else {
+                    if (document.getElementById("page_name").value != 'series_detail' && data.comicid != cid && data.status != 'mid-message-event') {
+                        console.log('addbyid:'+data.status, data.comicid, data.table, data.message);
+                        $('#ajaxMsg').removeClass();
+                        var dspline = '</br></br><input type="button" value="View Series" onclick="location.href=\'comicDetails?ComicID='+data.comicid+'\';"/>';
+                        $('#ajaxMsg').html("<div class='msg'>"+data.message+dspline+"</div>");
+                        $('#ajaxMsg').addClass('success').fadeIn().delay(5000).fadeOut();
+                        if (data.comicname != null || data.comicname != 'None'){
+                            title_loadings(data.comicname, data.seriesyear, data.comicid, data.message);
+                        }
+                    } else if (data.status != 'mid-message-event'){
+                        $('#ajaxMsg').removeClass();
+                        $('#ajaxMsg').html("<div class='msg'>"+data.message+"</div>");
+                        $('#ajaxMsg').addClass('success').fadeIn().delay(5000).fadeOut();
+                        if (data.comicname != null || data.comicname != 'None'){
+                            title_loadings(data.comicname, data.seriesyear, data.comicid, data.message);
+                        }
+                    }
+                }
+            }
+        }, false);
+
+        evtSource.addEventListener("scheduler_message", function(e){
+            if (e.data){
+                var data = JSON.parse(e.data);
+                console.log('scheduler:'+data.status,data.message);
+                $('#ajaxMsg').removeClass();
+                $('#ajaxMsg').html("<div class='msg'>"+data.message+"</div>");
+                if (data.status == 'success'){
+                    $('#ajaxMsg').addClass('success').fadeIn().delay(3000).fadeOut();
+                } else {
+                    $('#ajaxMsg').addClass('error').fadeIn().delay(3000).fadeOut();
+                }
+            }
+        }, false);
+
+        evtSource.addEventListener("config_check", function(e){
+            if (e.data){
+                var data = JSON.parse(e.data);
+                console.log('config_check:'+data.status,data.message);
+                $("#mbody").html(data.message);
+                $("#config_messages_dialog").dialog({
+                  modal: true,
+                  width: "50%",
+                  open: function() {
+                      $(this).closest(".ui-dialog").find(".ui-dialog-titlebar-close").attr("title", "Close warning").attr("aria-label", "Close warning");
+                  }
+                });
+            }
+        }, false);
+
+        evtSource.addEventListener("check_update", function(e){
+            if (e.data){
+                var data = JSON.parse(e.data);
+                console.log('update_msg:'+data.current_version, data.latest_version, data.commits_behind, data.status, data.docker);
+                $('#ajaxMsg').removeClass();
+                cck = "$('#updatebar').slideUp('slow');"
+                dc_behind = parseInt(data.commits_behind)
+                uptodate = false;
+                if (data.commmits_behind < 0){
+                    if (data.docker == 'true'){
+                        up_mess = 'You are running an unknown version of Mylar3. <a href="#" onclick="'+cck+'">Close</a>';
+                        up_linemess = '<span class="version_display">Unknown version</span>';
+                    } else {
+                        up_mess = 'You are running an unknown version of Mylar3. <a href="update">Update</a> or <a href="#" onclick="'+cck+'">Close</a>';
+                        up_linemess = '<a href="#" onclick="update_mylar()" title="You are running an Unknown version. Click to update" class="version_display"/>Unknown version</a>';
+                    }
+                } else if (data.current_version != data.latest_version && dc_behind > 0){
+                    if (data.docker == 'true'){
+                        up_mess = 'A <a href="https://github.com/MylarComics/mylar3/compare/'+data.current_version+'...'+data.latest_version+'" target="_blank"> newer version</a> is availble. You are '+dc_behind+' commits behind. <a href="#" onclick="'+cck+'">Close</a>';
+                        up_linemess = '<span class="version_display">'+dc_behind+' commits behind</span>';
+                    } else {
+                        up_mess = 'A <a href="https://github.com/MylarComics/mylar3/compare/'+data.current_version+'...'+data.latest_version+'" target="_blank"> newer version</a> is availble. You are '+dc_behind+' commits behind. <a href="update">Update</a> or <a href="#" onclick="'+cck+'">Close</a>';
+                        up_linemess = '<a href="#" onclick="location.href=\'update\';" title="Update now" class="version_display">'+dc_behind+' commits behind</a>';
+                    }
+                } else if (data.current_version == data.latest_version && dc_behind === 0){
+                    up_linemess = '<span class="version_display">No updates available</span>';
+                    uptodate = true;
+                } else {
+                    up_linemess = '???'
+                    //up_mess = 'sup Dawg?';
+                }
+
+                if (uptodate === true){
+                    $("#testing").html('<span title="Mylar is up-to-date">'+up_linemess+'</span>');
+                    $('#updatediv').html("<div id='updatebar'>Mylar is up to date</div>").fadeIn().delay(3000).fadeOut();
+                } else {
+                    $('#updatediv').html("<div id='updatebar'>"+up_mess+"</div>").fadeIn().delay(5000).fadeOut();
+                    $("#testing").html(up_linemess);
+                }
+                var startTime = new Date().getTime();
+                var interval = setInterval(function(){
+                    if (new Date().getTime() - startTime > 60000){
+                        clearInterval(interval);
+                        $("#testing").html('<a href="#" onclick="check_the_hub()"><span class="ui-icon ui-icon-refresh"></span><span id="version_line">Check for new version</span></a>');
+                        //$("#version_line").html('<a href="#" onclick="check_the_hub()">Check for new version'</a>);
+                        return;
+                    }
+                }, 2000);
+            }
+        }, false);
+
+        evtSource.addEventListener('message', function(e){
+            if ('END-OF-STREAM' == e.data) {
+                evtSource.close();
+            } else {
+                if(typeof(evtSource) === "undefined" || e.data === null){
+                   evtSource.close();
+                }
+                if (e.data){
+                    var data = JSON.parse(e.data);
+                    console.log(data.status, data.comicid, data.tables, data.message);
+                    if (data.status != 'mid-message-event'){
+                        $('#ajaxMsg').removeClass();
+                        $('#ajaxMsg').html("<div class='msg'><center>"+data.message+"</center></div>");
+                    }
+                    var cid = retrieve_comicid();
+                    var tt = document.getElementById("page_name");
+                    if (data.status == 'success'){
+                        $('#ajaxMsg').addClass('success').fadeIn().delay(3000).fadeOut();
+                        console.log('data.comicid:'+data.comicid)
+                        if ( ( tt.value != "config" ) && ( tt.value != "cblimport") && (data.tables == 'both' || data.tables == 'tables') && ( document.body.innerHTML.search(data.comicid) != -1 || tt.value == "history" || tt.value == "search_results") ){
+                            console.log('reloading table1...');
+                            reload_table();
+                        }
+                        else if ( (data.tables == 'both' || data.tables == 'tables') && (data.comicid == cid) ){
+                            console.log('reloading table2...');
+                            reload_table();
+                        }
+                        if ( (data.tables == 'both' || data.tables == 'tabs') && ( tt.value != "config") ) {
+                            reload_tabs();
+                        }
+                        if( data.comicid == cid && document.getElementById("page_name").value == 'series_detail'){
+                            console.log('title_loading...');
+                            if (data.comicname != null || data.comicname != 'None'){
+                                title_loadings(data.comicname, data.seriesyear, data.comicid, data.message);
+                            }
+                        }
+                    } else if (data.status == 'failure') {
+                        $('#ajaxMsg').addClass('error').fadeIn().delay(3000).fadeOut();
+                        if ( (data.tables == 'both' || data.tables == 'tables') && ( document.body.innerHTML.search(data.comicid) || tt.value == 'history' || tt.value == 'search_results') ){
+                            console.log('reloading table1...');
+                            reload_table();
+                        }
+                        else if ( (data.tables == 'both' || data.tables == 'tables') && (data.comicid == cid) ){
+                            console.log('reloading table2...');
+                            reload_table();
+                        }
+                        if (data.tables == 'both' || data.tables == 'tabs'){
+                            reload_tabs();
+                        }
+                        if( data.comicid == cid && document.getElementById("page_name").value == 'series_detail' ){
+                            if (data.comicname != null || data.comicname != 'None'){
+                                title_loadings(data.comicname, data.seriesyear, data.comicid);
+                            }
+                        }
+                    };
+                }
+            }
+        }, false);
+
+        function retrieve_comicid() {
+            try {
+                comicidval = document.getElementById("ComicID").value;
+            }
+            catch(err) {
+                comicidval = "00000";
+            }
+            finally {
+                return comicidval;
+            }
+        }
+
+        function update_mylar(){
+            "location.href=\'comicDetails?ComicID='+data.comicid+'\';"/
+            $.ajax({
+                 type: "GET",
+                 url: "update",
+                 success: function(response) {
+                 },
+                 error: function(data)
+                     {
+                       alert('ERROR'+data.responseText);
+                     },
+            })
+        }
+
+        function reload_table() {
+            var tables = $('table.display').DataTable();
+            var tt = document.getElementById("page_name");
+            if(typeof(tt) != 'undefined' && tt != null){
+                if (tt.value != "weekly" && tt.value != "import_results" && tt.value != "manage_comics" && tt.value != "manage_issues" && tt.value != "manage_failed" && tt.value != "reading_list" && tt.value != "storyarcs_index" && tt.value != "storyarc_detail" && tt.value != "config") {
+                    // this is required so it doesn't error if on the weekly page
+                    // once weekly & other pages are converted to dynamic loading, this if can be removed
+                    tables.ajax.reload(null,false);
+                }
+            }
+
+            if ( $('#notifs_dialog').dialog('isOpen') === true){
+                console.log('notifs_dialog open');
+                try {
+                    if ( $.fn.dataTable.isDataTable( '#notifs_table' ) ) {
+                        var t2 = $('table.display_notifs').DataTable();
+                        t2.ajax.reload(null,false);
+                    } else {
+                        data_the_table();
+                    }
+                } catch(err) {
+                    console.log('notif table not initialised');
+                    data_the_table();
+                }
+            }
+        }
+
+        function reload_tabs() {
+            console.log('reloading tabs..');
+            var url =  $(location).attr('href');
+            if (url.includes("&addbyid")){
+                lenc = url.indexOf("&addbyid=");
+                bed = lenc.length + 1;
+                url = url.substring(0,lenc)+url.substring(lenc+10);
+            }
+            var tabId = $('.ui-tabs-panel:visible').attr("id");
+            $('.ui-tabs-panel:visible').load(url + " #"+ tabId, function() {
+                $("#tabs").tabs({
+                    cache: false,
+                });
+            });
+            //var OtabId = $('.ui-tabs-panel:visible').attr("id");
+            //console.log('OtabId:'+OtabId);
+            //$('#tabs').tabs('load', "#tabs-2");
+            //$('#tabs').tabs('load', "#tabs-1");
+            //if ( OtabId == 'tabs-1' || OtabId == 'tabs-2' ){
+            //    if (OtabId === 'tabs-1'){
+            //        ntabId = "tabs-2";
+            //    } else {
+            //        ntabId = "tabs-1";
+            //    }
+            //    $('.ui-tabs-panel').load(url + " #"+ ntabId, function() {
+            //        console.log('reloading tab:'+ntabId);
+            //        //$("#tabs").tabs('load', " #"+ ntabId);
+            //    });
+            //}
+            //$('.ui-tabs-panel').load(url + " #"+ OtabId, function() {
+            //    console.log('reloading tab:'+OtabId);
+            //    //$("#tabs").tabs('load', "#"+ OtabId);
+            //});
+        }
+
+        function title_loadings(series_c_name,series_c_year, series_comicid, s_message) {
+            var tt = document.getElementById("page_name");
+            if (tt.value == "series_detail"){
+                ignore_block = false;
+                if (typeof(s_message) != 'undefined' && s_message != null){
+                    var series_c_url = 'comicDetails?ComicID='+series_comicid;
+                    console.log('series_c_name:'+series_c_name);
+                    console.log('s_message:'+s_message);
+                    var s_status = document.getElementById("series_status");
+                    var s_status_spinner = document.getElementById("loading_spinner");
+                    var status_hidden = document.getElementById("status_hidden").value;
+                    console.log('status:'+status_hidden);
+                    console.log('successfully added:'+s_message.search("Successfully added"));
+                    console.log('successfully refreshed:'+s_message.search("Successfully refreshed"));
+                    if ((s_message.search("Successfully added") == 0 || s_message.search("Successfully refreshed") == 0 || status_hidden != 'Loading')) {
+                        console.log('not blocking');
+                        s_status.style.display = "none";
+                        s_status.innerHTML = '';
+                        s_status_spinner.style.display = "none";
+                    } else if (typeof(series_c_name) != 'undefined' && series_c_name != null){
+                        console.log('blocking');
+                        s_status.style.display = "block";
+                        s_status.innerHTML = '(Comic information is currently being loaded)';
+                        s_status_spinner.style.display = "block";
+                        ignore_block = true;
+                    }
+                } else {
+                    console.log('else..');
+                    var status_hidden = document.getElementById("status_hidden").value;
+                    if (status_hidden == 'Loading'){
+                        console.log('loading status');
+                        document.getElementById("series_status").style.display = "block";
+                        document.getElementById("series_status").innerHTML = '(Comic information is currently being loaded)';
+                        document.getElementById("loading_spinner").style.display = "block";
+                    }
+                    series_c_name = document.getElementById("tab_comicname").value;
+                    series_c_year = document.getElementById("tab_comicyear").value;
+                    series_c_url = document.getElementById("tab_comicdetailurl").value;
+                }
+                if (ignore_block === false){
+                    console.log('ignore_block:'+ignore_block);
+                    var series_line = document.getElementById("series_line");
+                    series_line.innerHTML = '<a href="'+series_c_url+'" target="_blank">'+series_c_name+' ('+series_c_year+')</a>';
+                    console.log(series_line.innerHTML);
+                    document.title = 'Mylar - '+series_c_name;
+                }
+            }
+        }
+
+        function check_the_hub(){
+            update_line();
+            $.when($.ajax({
+                 type: "GET",
+                 url: "checkGithub",
+                 success: function(response) {
+                    //obj = JSON.parse(response);
+                    //$('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-check'></span>"+obj['message']+"</div>");
+                    //if (obj['status'] == 'success'){
+                    //    $('#ajaxMsg').addClass('success').fadeIn().delay(3000).fadeOut();
+                    //} else {
+                    //    $('#ajaxMsg').addClass('error').fadeIn().delay(3000).fadeOut();
+                    //}
+                 },
+                 error: function(data)
+                     {
+                       alert('ERROR'+data.responseText);
+                     },
+            })).done(function(data) {
+                $("#version_line").html('Check for new version');
+            });
+        }
+
+        function clear_notifs(){
+            $.when($.ajax({
+                 type: "GET",
+                 url: "clear_notifs",
+                 data: { session_id:  "${mylar.SESSION_ID}" },
+                 success: function(response) {
+                    obj = JSON.parse(response);
+                    $('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-check'></span>"+obj['message']+"</div>");
+                    if (obj['status'] == 'success'){
+                        $('#ajaxMsg').addClass('success').fadeIn().delay(3000).fadeOut();
+                    } else {
+                        $('#ajaxMsg').addClass('error').fadeIn().delay(3000).fadeOut();
+                    }
+                 },
+                 error: function(data)
+                     {
+                       alert('ERROR'+data.responseText);
+                     },
+            })).done(function(data) {
+                 notif_checks();
+            });
+        }
+
+        function always_notifs(reloads) {
+            if ( $('#notifs_dialog').dialog('isOpen') === true){
+                $("#notifs_dialog").dialog('destroy');
+            }
+            dd = document.getElementById("always_the_notifs");
+            de = document.getElementById("menu_link_always");
+            if (dd.value == 'top'){
+                console.log('not_modal')
+                tmpvalue = 'modal';  //opposite
+                de.style.background = "ffffff";
+                de.style.backgroundColor = "#ffffff";
+                de.style.backgroundImage = "-moz-linear-gradient(#599bdc, #3072b3) !important;linear-gradient(#599bdc, #3072b3) !important;-webkit-linear-gradient(#599bdc, #3072b3) !important;-o-linear-gradient(#599bdc, #3072b3) !important;";
+                de.style.filter = "progid:dximagetransform.microsoft.gradient(startColorstr=#fafafa, endColorstr=#eaeaea) !important";
+                de.style.color = "#FFF";
+                de.style.borderColor = "#272b30 #272b30 #272b30";
+                dialog_for_notifs(false);
+            } else {
+                console.log('modal')
+                tmpvalue = 'top'; //oppposite
+                de.style.background = "#3072b3";
+                de.style.backgroundColor = "#3072b3";
+                de.style.backgroundImage = "-moz-linear-gradient(#599bdc, #3072b3) !important;linear-gradient(#599bdc, #3072b3) !important;-webkit-linear-gradient(#599bdc, #3072b3) !important;-o-linear-gradient(#599bdc, #3072b3) !important;";
+                de.style.filter = "progid:dximagetransform.microsoft.gradient(startColorstr=#fafafa, endColorstr=#eaeaea) !important";
+                de.style.color = "#FFF";
+                de.style.borderColor = "#3072b3 #3072b3 #3072b3";
+                dialog_for_notifs(true);
+            }
+            if(typeof(reloads) === "undefined" || reloads === null){
+                notif_checks();
+            }
+            dd.value = tmpvalue;
+        }
+
+        function dialog_for_notifs(modal_value){
+            $("#notifs_dialog").dialog({
+                create: function(event, ui) {
+                    $(event.target).parent().css('position', 'fixed');
+                },
+                resizeStop: function(event, ui) {
+                    var position = [(Math.floor(ui.position.left) - $(window).scrollLeft()),
+                                     (Math.floor(ui.position.top) - $(window).scrollTop())];
+                    $(event.target).parent().css('position', 'fixed');
+                    $("#notifs_dialog").dialog('option','position',position);
+                },
+                modal: modal_value,
+                width: "70%",
+            });
+        }
+
+        // try to get the popup to stay on top on a new page load (doesn't work)
+        window.addEventListener("beforeunload", function (event) {
+            if (document.getElementById("always_the_notifs").value == 'top'){
+                dialog_for_notifs(false);
+            }
+        });
+
+        document.onkeyup=function(e){
+            var e = e || window.event;
+            if (e.altKey && e.which == 78) {
+                console.log('alt_N combo');
+                manageNotifications();
+            }
+        }
+
+        function manageNotifications() {
+            dialog_for_notifs(true);
+            always_notifs();
+            //notif_checks();
+        }
+
+        function notif_checks(){
+            try {
+                if ( $.fn.dataTable.isDataTable( '#notifs_table' ) ) {
+                    console.log('boom1');
+                    var t2 = $('table.display_notifs').DataTable();
+                    t2.ajax.reload(null,false);
+                    //t2.columns.adjust().draw();
+                } else {
+                    console.log('boom2');
+                    data_the_table();
+                }
+            } catch(err) {
+                console.log('boom3');
+                console.log('manage - no notifs table');
+                data_the_table();
+            }
+        }
+
+        function flippylogo() {
+            $('img.mylarload').addClass('spinny').removeClass('lastgood').removeClass('lastbad');
+        }
+
+        function update_line() {
+            $('#version_line').html('<span class="loadingdots">Checking for update</span>');
+        }
+
+        function check_the_update(){
+            var updateval = JSON.parse('${pre_update}');
+            if (updateval['update_value'] === 0){
+                up_linemess = '<span class="version_display">No updates available</span>';
+                var startTime = new Date().getTime();
+                var interval = setInterval(function(){
+                    if (new Date().getTime() - startTime > 60000){
+                        clearInterval(interval);
+                        $("#testing").html('<a href="#" onclick="check_the_hub()"><span class="ui-icon ui-icon-refresh"></span><span id="version_line">Check for new version</span></a>');
+                        return;
+                    }
+                }, 2000);
+            } else if (updateval['update_value'] > 0){
+                if (updateval['docker'] == 'true'){
+                    up_linemess = '<a href="#" title="you must manually update your docker" class="version_display">'+updateval['update_value']+' commits behind</a>';
+                } else {
+                    up_linemess = '<a href="#" onclick="location.href=\'update\';" title="Update now" class="version_display">'+updateval['update_value']+' commits behind</a>';
+                }
+            } else if (updateval['update_value'] == -1){
+                if (updateval['docker'] == 'true'){
+                    up_linemess = '<a href="#" title="You are running an Unknown version" class="version_display">Unknown version</a>';
+                } else {
+                    up_linemess = '<a href="#" onclick="update_mylar()" title="You are running an Unknown version" class="version_display">Unknown version</a>';
+                }
+            } else {
+                up_linemess = '<a href="#" onclick="check_the_hub()"><span class="ui-icon ui-icon-refresh"></span><span id="version_line">Check for new version</span></a>';
+            }
+                $("#testing").html(up_linemess);
+        }
+
+        function data_the_table(){
+            $('#notifs_table').dataTable( {
+                "preDrawCallback": function (settings){
+                    //pageScrollPos = $('#notifs_table div.datatables_scrollBody').scrollTop();
+                    //$("notifs_dialog").dialog({modal:true});
+                },
+                "sDom": '<"clear">t<"clear"p>',
+                "processing": true,
+                "serverSide": true,
+                "ajaxSource": 'manageNotifs',
+                "destroy": true,
+                "ajax": {
+                    "data": function (d) {
+                        d.session_id = "${mylar.SESSION_ID}",
+                        d.modal = document.getElementById("always_the_notifs").value
+                    },
+                },
+                "columnDefs": [
+                    {
+                       "sortable": true,
+                       "targets": [ 0 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                           return full[0];
+                       }
+                    },
+                    {
+                       "sortable": true,
+                       "targets": [ 1 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                            return full[1];
+                       }
+                    },
+                    {
+                       "sortable": true,
+                       "targets": [ 2 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                           if (full[2]){
+                               return '<a href="comicDetails?ComicID='+full[2]+'">'+full[2]+'</a>';
+                           } else {
+                               return null;
+                           }
+                       }
+                    },
+                ],
+                "paginationType": "simple_numbers",
+                "displayLength": 25,
+                "stateSave": true,
+                "lengthMenu": [[10, 15, 25, 50, 100, 200, -1], [10, 15, 25, 50, 100, 200, 'All' ]],
+                "language": {
+                     "lengthMenu": "Show _MENU_ items per page",
+                     "emptyTable": "No information available",
+                     "infoEmpty": "Showing 0 to 0 of 0 lines",
+                },
+                "rowCallback": function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
+                     nRow.children[0].id = 'date';
+                     nRow.children[1].id = 'message';
+                     nRow.children[2].id = 'comicid';
+                     return nRow;
+                },
+                "drawCallback": function (o) {
+                     // Jump to top of page
+                     //$('#notifs_table div.dataTables_scrollBody').scrollTop(pageScrollPos);
+                },
+                "serverData": function ( sSource, aoData, fnCallback ) {
+                     /* Add some extra data to the sender */
+                     aoData.push({"name": "paging_session_id", "value": "${mylar.SESSION_ID}" });
+                     aoData.push({"name": "modal_p", "value": document.getElementById("always_the_notifs").value });
+                     $.getJSON(sSource, aoData, function (json) {
+                        if (json.modal){
+                            console.log('returned_modal_value:'+json.modal);
+                            if (json.modal != document.getElementById("always_the_notifs").value){
+                                document.getElementById("always_the_notifs").value = json.modal;
+                            }
+                            always_notifs(false);
+                        }
+                        fnCallback(json)
+                     });
+                },
+                "fnInitComplete": function(oSettings, json)
+                {
+                },
+            });
+        }
+
+        $(document).ready(function() {
+            check_the_update();
+
+            // Set active navigation state based on current location and page_name
+            var path = window.location.pathname.split("/").pop() || "home";
+            var pageName = $("#page_name").length ? $("#page_name").val() : "";
+            $(".nav-item").each(function() {
+                var navTarget = $(this).attr("data-nav") || $(this).attr("href");
+                if (navTarget === path || 
+                    ((path === 'storyarc_main' || path === 'detailStoryArc') && navTarget === 'storyarcs') ||
+                    ((path === 'creators' || path === 'creator_detail') && navTarget === 'creators') ||
+                    (pageName && (navTarget === pageName || 
+                    (pageName === 'index' && navTarget === 'home') || 
+                    (pageName === 'weekly' && navTarget === 'pullist') || 
+                    (pageName === 'manage_comics' && navTarget === 'manageComics') ||
+                    (pageName === 'storyarc' && navTarget === 'storyarcs') ||
+                    (pageName === 'creators' && navTarget === 'creators') ||
+                    (pageName === 'creator_detail' && navTarget === 'creators')))) {
+                    $(this).addClass("active");
+                }
+            });
+
+            // Mobile sidebar toggle handlers
+            $("#sidebarToggle").on("click", function(e) {
+                e.stopPropagation();
+                $("#sidebar").toggleClass("sidebar-open");
+                $("#sidebar-overlay").toggleClass("active");
+            });
+            $("#sidebar-overlay").on("click", function() {
+                $("#sidebar").removeClass("sidebar-open");
+                $("#sidebar-overlay").removeClass("active");
+            });
+
+            // '/' key to focus search input
+            $(document).on("keydown", function(e) {
+                if (e.key === "/" && !$(e.target).is("input, textarea, select") && !e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    $("#searchbar input[name='name']").focus();
+                }
+            });
+        });
+        </script>
+	<!-- This template is made by Elmar Kouwenhoven -->
+</body>
+</html>
+
+<%def name="javascriptIncludes()"></%def>
+<%def name="headIncludes()"></%def>
+<%def name="headerIncludes()"></%def>

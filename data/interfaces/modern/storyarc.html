@@ -1,0 +1,802 @@
+<%inherit file="base.html"/>
+<%
+    import mylar
+%>
+
+<%def name="body()">
+    <input type="hidden" id="page_name" value="storyarc" />
+    
+    <div class="content-header">
+        <div class="content-header-left">
+            <h1 class="page-title">Story Arcs</h1>
+            <p class="page-subtitle">Reading lists and multi-series comic crossovers</p>
+        </div>
+        <div class="content-header-actions">
+            <button type="button" class="btn-primary" id="openCblModalBtn" onclick="openCblModal()">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="8" y1="3" x2="8" y2="13"></line>
+                    <line x1="3" y1="8" x2="13" y2="8"></line>
+                </svg>
+                Import CBL Reading List
+            </button>
+        </div>
+    </div>
+
+    <div class="content-body">
+        %if not arclist:
+            <div class="empty-state-card">
+                <div class="empty-state-icon">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                    </svg>
+                </div>
+                <h3>No Story Arcs Imported</h3>
+                <p>Track multi-series reading lists and crossovers in sequential order across your entire comic library.</p>
+                <button type="button" class="btn-primary" onclick="openCblModal()" style="margin-top: 14px;">
+                    Import CBL Reading List
+                </button>
+            </div>
+        %else:
+            <div class="arc-grid">
+                %for item in arclist:
+                    <%
+                        have = item.get('Have', 0)
+                        total = item.get('TotalIssues', 0)
+                        percent = item.get('percent', 0)
+                        manifest = item.get('Manifest')
+                        src_type = manifest.get('SourceType') if manifest else None
+                    %>
+                    <div class="arc-card" onclick="window.location.href='detailStoryArc?StoryArcID=${item['StoryArcID']}'">
+                        <div class="arc-card-header">
+                            <div class="arc-card-badges">
+                                <span class="badge badge-publisher">${item.get('Publisher', 'Comic')}</span>
+                                <span class="badge badge-years">${item.get('SpanYears', '—')}</span>
+                                %if manifest:
+                                    %if src_type == 'upload':
+                                        <span class="badge badge-upload" title="User Uploaded CBL Manifest">User Upload</span>
+                                    %else:
+                                        <span class="badge badge-provenance" title="Source: DieselTech / CBL-ReadingLists">CBL · DieselTech</span>
+                                    %endif
+                                %endif
+                            </div>
+                            <h2 class="arc-card-title">${item['StoryArc']}</h2>
+                        </div>
+                        <div class="arc-card-progress">
+                            <div class="arc-progress-info">
+                                <span class="arc-progress-label">${have} of ${total} Downloaded</span>
+                                <span class="arc-progress-pct">${percent}%</span>
+                            </div>
+                            <div class="arc-progress-bar-wrap">
+                                <div class="arc-progress-bar" style="width: ${percent}%;"></div>
+                            </div>
+                        </div>
+                        <div class="arc-card-footer">
+                            <span class="arc-view-link">
+                                Explore Reading Order
+                                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M6 3l5 5-5 5"></path>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                %endfor
+            </div>
+        %endif
+    </div>
+
+    <!-- Staged & User Upload CBL Import Modal -->
+    <div id="cblImportModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cblModalTitle">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title" id="cblModalTitle">Import CBL Reading List</h3>
+                <button type="button" class="modal-close-btn" onclick="closeCblModal()" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="cblModalBody">
+                <!-- Source Tabs -->
+                <div class="cbl-tab-group" role="tablist">
+                    <button type="button" class="cbl-tab-btn active" id="tabUploadBtn" onclick="switchImportTab('upload')">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 11v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"></path>
+                            <polyline points="5 6 8 3 11 6"></polyline>
+                            <line x1="8" y1="3" x2="8" y2="11"></line>
+                        </svg>
+                        Upload Local CBL File
+                    </button>
+                    <button type="button" class="cbl-tab-btn" id="tabCatalogBtn" onclick="switchImportTab('catalog')">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 3h12a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path>
+                            <line x1="2" y1="7" x2="14" y2="7"></line>
+                            <line x1="6" y1="3" x2="6" y2="14"></line>
+                        </svg>
+                        Browse DieselTech Catalog
+                    </button>
+                    <button type="button" class="cbl-tab-btn" id="tabStagedBtn" onclick="switchImportTab('staged')">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="8" cy="8" r="6"></circle>
+                            <path d="M8 5v3l2 2"></path>
+                        </svg>
+                        Examples &amp; Test Lists
+                    </button>
+                </div>
+
+                <!-- Tab 1: Upload File -->
+                <div id="tabContentUpload" class="tab-content">
+                    <div class="cbl-dropzone" id="cblDropzone" onclick="triggerCblFilePicker()">
+                        <input type="file" id="cblFileInput" accept=".cbl,.xml" style="display:none;" onchange="handleFileSelected(this.files)" />
+                        <div class="dropzone-icon">
+                            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M4 16v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"></path>
+                                <polyline points="8 8 12 4 16 8"></polyline>
+                                <line x1="12" y1="4" x2="12" y2="16"></line>
+                            </svg>
+                        </div>
+                        <p class="dropzone-text" id="dropzoneText">
+                            Drag and drop a <strong>.cbl</strong> or <strong>.xml</strong> file here, or <span class="dropzone-link" id="dropzoneBrowseLink" onclick="triggerCblFilePicker(event)">browse</span>
+                        </p>
+                        <p class="dropzone-hint">Maximum file size: 5 MB · Uses ComicVine IDs only; unresolved entries are clearly flagged.</p>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Browse DieselTech Catalog -->
+                <div id="tabContentCatalog" class="tab-content" style="display:none;">
+                    <div class="catalog-header-bar">
+                        <div class="catalog-status-info" id="catalogStatusInfo">
+                            <span class="catalog-status-dot" id="catalogStatusDot"></span>
+                            <span id="catalogStatusText">No local catalog cached.</span>
+                        </div>
+                        <button type="button" class="btn-primary btn-sm" id="refreshCatalogBtn" onclick="refreshDieselTechCatalog()">
+                            <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 4v4h4"></path>
+                                <path d="M3.51 10a5 5 0 1 0 1.1-5.5L1 8"></path>
+                            </svg>
+                            Refresh DieselTech Catalog
+                        </button>
+                    </div>
+
+                    <!-- Search & Filter Controls (shown when catalog is cached) -->
+                    <div id="catalogSearchControls" style="display:none; margin-top: 10px;">
+                        <div class="catalog-filter-row">
+                            <input type="text" id="catalogSearchInput" class="form-input catalog-search-input" placeholder="Search reading lists by name, series, era..." oninput="handleCatalogSearchInput()" />
+                            <select id="catalogPublisherSelect" class="form-select catalog-filter-select" onchange="handleCatalogSearchInput()">
+                                <option value="">All Publishers</option>
+                            </select>
+                        </div>
+                        <div class="catalog-results-summary">
+                            <span id="catalogResultsCount">0 lists found</span>
+                            <a href="https://github.com/DieselTech/CBL-ReadingLists" target="_blank" rel="noopener noreferrer" class="catalog-repo-link">DieselTech/CBL-ReadingLists &nearr;</a>
+                        </div>
+                        <div class="table-responsive catalog-table-wrap">
+                            <table class="catalog-table">
+                                <thead>
+                                    <tr>
+                                        <th>Reading List</th>
+                                        <th>Publisher</th>
+                                        <th>Category</th>
+                                        <th style="text-align:right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="catalogTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Catalog Empty / Initial State (when not cached) -->
+                    <div id="catalogEmptyState" class="catalog-empty-box" style="display:none;">
+                        <p>No local catalog index cached yet.</p>
+                        <p class="catalog-empty-hint">Click <strong>Refresh DieselTech Catalog</strong> above to index available reading lists from the public repository (1 request, ~350KB).</p>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Examples & Test Lists -->
+                <div id="tabContentStaged" class="tab-content" style="display:none;">
+                    <div class="benchmark-info-box">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#60a5fa; flex-shrink:0;">
+                            <circle cx="8" cy="8" r="7"></circle>
+                            <line x1="8" y1="8" x2="8" y2="12"></line>
+                            <line x1="8" y1="4" x2="8.01" y2="4"></line>
+                        </svg>
+                        <p class="benchmark-info-text">
+                            These are bundled examples for evaluating Story Arc behavior and do not interact with your local files or comic library.
+                        </p>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label class="form-label" for="manifestTokenSelect">Select Example Reading List:</label>
+                        <select id="manifestTokenSelect" class="form-select" onchange="updateManifestMeta()">
+                            <option value="marvel_secret_invasion">Secret Invasion (Official) (98 Issues · Bundled Example)</option>
+                            <option value="batman_lonely_place_of_dying">Batman: A Lonely Place of Dying (5 Issues · Bundled Example)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Metadata Box -->
+                <div id="manifestMetaBox" class="manifest-meta-box" style="display:none;">
+                    <button type="button" class="btn-secondary btn-sm" id="catalogBackBtn" style="display:none; margin-bottom:4px; align-self:flex-start;" onclick="backToCatalogSearch()">
+                        &larr; Back to Catalog
+                    </button>
+                    <div class="manifest-meta-row"><strong>Source:</strong> <code id="metaSourceFile">—</code></div>
+                    <div class="manifest-meta-row" id="metaRepoRow"><strong>Repository:</strong> <span id="metaRepo">—</span></div>
+                    <div class="manifest-meta-row"><strong>SHA-256:</strong> <code id="metaHash" class="hash-code">—</code></div>
+                </div>
+
+                <!-- Reconciliation Preview Table -->
+                <div id="previewResultsContainer" style="display:none;">
+                    <h4 class="preview-section-title">Reconciliation Preview</h4>
+                    <div class="table-responsive preview-table-wrap">
+                        <table class="preview-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Series</th>
+                                    <th>Issue</th>
+                                    <th>ComicVine IDs</th>
+                                    <th>Local Resolution</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Alert Box -->
+                <div id="modalAlertBox" class="modal-alert" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeCblModal()">Cancel</button>
+                <button type="button" class="btn-primary" id="fetchPreviewBtn" style="display:none;" onclick="fetchCblPreview()">Validate & Preview</button>
+                <button type="button" class="btn-success" id="confirmImportBtn" style="display:none;" onclick="confirmCblImport()">Confirm & Import Story Arc</button>
+            </div>
+        </div>
+    </div>
+</%def>
+
+<%def name="headIncludes()">
+    <style>
+        .arc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+        .arc-card {
+            background: var(--card-bg, #1a1e29);
+            border: 1px solid var(--border-color, #2a3142);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .arc-card:hover {
+            transform: translateY(-2px);
+            border-color: #3b82f6;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .arc-card-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-publisher { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .badge-years { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .badge-provenance { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+        .badge-upload { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .arc-card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin: 0 0 16px 0;
+            line-height: 1.3;
+        }
+        .arc-card-progress {
+            margin-bottom: 16px;
+        }
+        .arc-progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        .arc-progress-pct {
+            color: #34d399;
+            font-weight: 700;
+        }
+        .arc-progress-bar-wrap {
+            background: rgba(255, 255, 255, 0.08);
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .arc-progress-bar {
+            background: #10b981;
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        .arc-card-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 12px;
+            margin-top: auto;
+        }
+        .arc-view-link {
+            font-size: 13px;
+            font-weight: 600;
+            color: #60a5fa;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .empty-state-card {
+            background: var(--card-bg, #1a1e29);
+            border: 1px dashed #2a3346;
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            max-width: 500px;
+            margin: 40px auto;
+        }
+        .empty-state-icon {
+            color: #475569;
+            margin-bottom: 16px;
+        }
+        .empty-state-card h3 {
+            color: #f1f5f9;
+            margin: 0 0 8px 0;
+        }
+        .empty-state-card p {
+            color: #94a3b8;
+            font-size: 13px;
+            margin: 0;
+            line-height: 1.5;
+        }
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+        .modal-card {
+            background: #1e2433;
+            border: 1px solid #2f384d;
+            border-radius: 14px;
+            width: 100%;
+            max-width: 720px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #2a3346;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin: 0;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-close-btn:hover { color: #f8fafc; }
+        .modal-body {
+            padding: 20px 20px 24px 20px;
+            overflow-y: auto;
+            flex: 1 1 auto;
+            min-height: 0;
+            -webkit-overflow-scrolling: touch;
+        }
+        /* Tab Group */
+        .cbl-tab-group {
+            display: flex;
+            background: #131722;
+            border: 1px solid #2a3346;
+            border-radius: 8px;
+            padding: 3px;
+            gap: 2px;
+            margin-bottom: 16px;
+        }
+        .cbl-tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .cbl-tab-btn:hover { color: #f1f5f9; }
+        .cbl-tab-btn.active {
+            background: #252d3d;
+            color: #60a5fa;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        /* Dropzone */
+        .cbl-dropzone {
+            border: 2px dashed #3b4861;
+            border-radius: 10px;
+            padding: 28px 20px;
+            text-align: center;
+            background: rgba(19, 23, 34, 0.6);
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .cbl-dropzone:hover, .cbl-dropzone.dragover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .dropzone-icon {
+            color: #60a5fa;
+            margin-bottom: 8px;
+        }
+        .dropzone-text {
+            color: #cbd5e1;
+            font-size: 13px;
+            margin: 0 0 4px 0;
+        }
+        .dropzone-link {
+            color: #60a5fa;
+            text-decoration: underline;
+            font-weight: 600;
+        }
+        .dropzone-hint {
+            color: #64748b;
+            font-size: 11px;
+            margin: 0;
+        }
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+        }
+        .form-select {
+            width: 100%;
+            background: #131722;
+            border: 1px solid #2a3346;
+            border-radius: 8px;
+            color: #f1f5f9;
+            padding: 9px 12px;
+            font-size: 13px;
+            outline: none;
+        }
+        .form-select:focus {
+            border-color: #3b82f6;
+        }
+        .manifest-meta-box {
+            background: #131722;
+            border: 1px solid #252d3d;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 12px;
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .manifest-meta-row strong { color: #94a3b8; }
+        .manifest-meta-row code { color: #cbd5e1; word-break: break-all; }
+        .manifest-meta-box .hash-code { color: #a78bfa; }
+        .preview-section-title { font-size: 13px; font-weight: 600; color: #f1f5f9; margin: 16px 0 8px 0; }
+        .preview-table-wrap {
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid #2a3346;
+            border-radius: 8px;
+        }
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .preview-table th, .preview-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #252d3d;
+        }
+        .preview-table th { color: #94a3b8; font-weight: 600; background: #181d2a; position: sticky; top: 0; }
+        .preview-table td { color: #e2e8f0; }
+        .badge-status {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .badge-status-downloaded { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-status-monitored { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge-status-unmonitored { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+        .badge-status-unmatched { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+        .modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid #2a3346;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background: #181d2a;
+            border-bottom-left-radius: 14px;
+            border-bottom-right-radius: 14px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 10;
+        }
+        .modal-alert {
+            margin-top: 14px;
+            margin-bottom: 8px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .modal-alert-info { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .modal-alert-success { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .modal-alert-warning { background: rgba(245, 158, 11, 0.15); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.35); }
+        .modal-alert-error { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        /* Catalog Browser Components */
+        .catalog-header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #181d2a;
+            border: 1px solid #2a3346;
+            border-radius: 8px;
+            padding: 8px 12px;
+            gap: 8px;
+        }
+        .catalog-status-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .catalog-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+            display: inline-block;
+        }
+        .catalog-status-dot.active { background: #10b981; }
+        .catalog-status-dot.stale { background: #f59e0b; }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 11px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .catalog-filter-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .catalog-search-input {
+            flex: 1;
+            padding: 6px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid #2a3346;
+            background: #0f141f;
+            color: #f1f5f9;
+        }
+        .catalog-filter-select {
+            width: 140px;
+            padding: 6px 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid #2a3346;
+            background: #0f141f;
+            color: #f1f5f9;
+        }
+        .catalog-results-summary {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 6px;
+            padding: 0 2px;
+        }
+        .catalog-repo-link {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        .catalog-repo-link:hover { text-decoration: underline; }
+        .catalog-table-wrap {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #2a3346;
+            border-radius: 8px;
+            background: #111622;
+        }
+        .catalog-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .catalog-table th, .catalog-table td {
+            padding: 7px 10px;
+            text-align: left;
+            border-bottom: 1px solid #1f2737;
+        }
+        .catalog-table th {
+            color: #94a3b8;
+            font-weight: 600;
+            background: #181d2a;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .catalog-table tr:hover { background: rgba(59, 130, 246, 0.05); }
+        .catalog-empty-box {
+            background: #181d2a;
+            border: 1px dashed #2a3346;
+            border-radius: 8px;
+            padding: 24px 16px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        .catalog-empty-hint {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        .benchmark-info-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+        }
+        .benchmark-info-text {
+            font-size: 12px;
+            color: #93c5fd;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        @media (max-width: 640px) {
+            .modal-overlay {
+                padding: 12px 10px;
+                align-items: center;
+            }
+            .modal-card {
+                max-height: 92vh;
+                border-radius: 12px;
+            }
+            .modal-header {
+                padding: 12px 16px;
+            }
+            .modal-body {
+                padding: 12px 12px 32px 12px;
+            }
+            .modal-footer {
+                padding: 12px 14px;
+                flex-direction: column-reverse;
+                gap: 8px;
+            }
+            .modal-footer button {
+                width: 100%;
+                justify-content: center;
+            }
+            .cbl-dropzone {
+                padding: 12px 10px;
+                margin-top: 8px;
+            }
+            .cbl-dropzone svg {
+                width: 28px;
+                height: 28px;
+                margin-bottom: 4px;
+            }
+            .manifest-meta-box {
+                margin-top: 8px;
+                padding: 8px 10px;
+            }
+            .preview-section-title {
+                margin: 10px 0 6px 0;
+            }
+            .preview-table-wrap {
+                max-height: 180px;
+            }
+            .preview-table th, .preview-table td {
+                padding: 6px 6px;
+                font-size: 11px;
+            }
+            .preview-table th {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .badge-status {
+                font-size: 10px;
+                padding: 2px 5px;
+            }
+            .modal-alert {
+                margin-top: 10px;
+                margin-bottom: 12px;
+                padding: 8px 12px;
+            }
+            .cbl-tab-btn {
+                font-size: 11px;
+                padding: 6px 8px;
+            }
+            .catalog-header-bar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
+            }
+            .catalog-filter-row {
+                flex-direction: column;
+                gap: 6px;
+            }
+            .catalog-filter-select {
+                width: 100%;
+            }
+            .catalog-table th, .catalog-table td {
+                padding: 6px 6px;
+                font-size: 11px;
+            }
+            .dropzone-text {
+                font-size: 12px;
+            }
+        }
+    </style>
+</%def>
+
+<%def name="javascriptIncludes()">
+    <script id="storyarc-page-config" type="application/json">
+    {
+        "page": "catalog"
+    }
+    </script>
+    <script src="interfaces/modern/js/storyarc-explorer.js"></script>
+</%def>

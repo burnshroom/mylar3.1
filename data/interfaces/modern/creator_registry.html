@@ -1,0 +1,1522 @@
+<%!
+    import html
+%>
+<%inherit file="base.html"/>
+<%
+    import mylar
+%>
+
+<%def name="body()">
+    <input type="hidden" id="page_name" value="creator_registry" />
+
+    <style>
+        /* ─── CREATOR SUB-NAVIGATION TABS ─── */
+        .creator-nav-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--color-border, #292c37);
+            padding-bottom: 12px;
+        }
+
+        .creator-nav-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: var(--radius-md, 8px);
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--color-text-secondary, #9ea3b5);
+            text-decoration: none;
+            background: transparent;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .creator-nav-tab:hover {
+            color: var(--color-text, #f0f1f5);
+            background: var(--color-surface-elevated, #1e2027);
+        }
+
+        .creator-nav-tab.active {
+            color: #fff;
+            background: var(--color-accent, #e04652);
+            border-color: var(--color-accent, #e04652);
+        }
+
+        /* ─── REGISTRY HEADER & STATS ─── */
+        .registry-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .registry-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin: 0 0 4px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .registry-subtitle {
+            font-size: 13px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin: 0;
+        }
+
+        /* ─── STATE FILTER CHIPS ─── */
+        .registry-filter-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .state-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: var(--radius-pill, 9999px);
+            font-size: 12.5px;
+            font-weight: 600;
+            text-decoration: none;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            color: var(--color-text-secondary, #9ea3b5);
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .state-chip:hover {
+            border-color: var(--color-border-hover, #3c4050);
+            color: var(--color-text, #f0f1f5);
+        }
+
+        .state-chip.active {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: rgba(56, 189, 248, 0.5);
+            color: #38bdf8;
+        }
+
+        .state-chip.chip-confirmed.active {
+            background: rgba(34, 197, 94, 0.15);
+            border-color: rgba(34, 197, 94, 0.5);
+            color: #4ade80;
+        }
+
+        .state-chip.chip-transferred.active {
+            background: rgba(168, 85, 247, 0.15);
+            border-color: rgba(168, 85, 247, 0.5);
+            color: #c084fc;
+        }
+
+        .state-chip.chip-rejected.active {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #f87171;
+        }
+
+        .state-chip.chip-reversed.active {
+            background: rgba(234, 179, 8, 0.15);
+            border-color: rgba(234, 179, 8, 0.5);
+            color: #facc15;
+        }
+
+        .state-chip.chip-conflicted.active {
+            background: rgba(244, 63, 94, 0.15);
+            border-color: rgba(244, 63, 94, 0.5);
+            color: #fb7185;
+        }
+
+        .state-chip .chip-count {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-pill, 9999px);
+            padding: 1px 7px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        /* ─── REGISTRY TOOLBAR ─── */
+        .registry-toolbar {
+            background: var(--color-surface, #17181e);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-lg, 12px);
+            padding: 14px 18px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .registry-search-field {
+            position: relative;
+            flex: 1 1 240px;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .registry-search-field input {
+            width: 100%;
+            height: 38px;
+            padding: 8px 12px 8px 34px;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            color: var(--color-text, #f0f1f5);
+            font-size: 13px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.15s ease;
+        }
+
+        .registry-search-field input:focus {
+            border-color: var(--color-accent, #e04652);
+        }
+
+        .registry-search-icon {
+            position: absolute;
+            left: 11px;
+            top: 12px;
+            color: var(--color-text-muted, #6c7184);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .registry-filter-select {
+            padding: 8px 14px;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            color: var(--color-text, #f0f1f5);
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .registry-filter-select:focus {
+            border-color: var(--color-accent, #e04652);
+        }
+
+        .registry-btn-filter {
+            padding: 8px 16px;
+            background: var(--color-accent, #e04652);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md, 8px);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .registry-btn-filter:hover {
+            background: var(--color-accent-hover, #f05562);
+        }
+
+        .registry-btn-reset {
+            padding: 8px 14px;
+            background: transparent;
+            color: var(--color-text-secondary, #9ea3b5);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+
+        .registry-btn-reset:hover {
+            color: var(--color-text, #f0f1f5);
+            border-color: var(--color-border-hover, #3c4050);
+        }
+
+        /* ─── REGISTRY TABLE & CARDS ─── */
+        .registry-container {
+            background: var(--color-surface, #17181e);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-lg, 12px);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .registry-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        .registry-table th {
+            background: var(--color-surface-elevated, #1e2027);
+            color: var(--color-text-muted, #6c7184);
+            font-weight: 600;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--color-border, #292c37);
+            font-size: 11.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .registry-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--color-border-subtle, #1f212a);
+            color: var(--color-text, #f0f1f5);
+            vertical-align: middle;
+        }
+
+        .registry-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .registry-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .reg-local-name {
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .reg-local-id {
+            font-family: var(--font-mono, monospace);
+            font-size: 11px;
+            color: var(--color-text-muted, #6c7184);
+        }
+
+        .reg-provider-target {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .reg-provider-name {
+            font-weight: 600;
+            color: var(--color-text, #f0f1f5);
+        }
+
+        .reg-provider-id {
+            font-family: var(--font-mono, monospace);
+            font-size: 11px;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.08);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            padding: 1px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            width: fit-content;
+        }
+
+        /* ─── STATE BADGES ─── */
+        .reg-state-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 9px;
+            border-radius: var(--radius-pill, 9999px);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .reg-state-confirmed {
+            background: rgba(34, 197, 94, 0.12);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .reg-state-transferred {
+            background: rgba(168, 85, 247, 0.12);
+            color: #c084fc;
+            border: 1px solid rgba(168, 85, 247, 0.35);
+        }
+
+        .reg-state-rejected {
+            background: rgba(239, 68, 68, 0.12);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .reg-state-reversed {
+            background: rgba(234, 179, 8, 0.12);
+            color: #facc15;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        .reg-state-conflicted {
+            background: rgba(244, 63, 94, 0.12);
+            color: #fb7185;
+            border: 1px solid rgba(244, 63, 94, 0.3);
+        }
+
+        .reg-state-unresolved {
+            background: rgba(148, 163, 184, 0.12);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .reg-decision-meta {
+            font-size: 12px;
+            color: var(--color-text-secondary, #9ea3b5);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .reg-actor-pill {
+            font-size: 10.5px;
+            color: var(--color-text-muted, #6c7184);
+        }
+
+        .reg-event-count {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill, 9999px);
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            color: var(--color-text-secondary, #9ea3b5);
+        }
+
+        .reg-source-link {
+            color: var(--color-accent, #e04652);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 12.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .reg-source-link:hover {
+            color: var(--color-accent-hover, #f05562);
+            text-decoration: underline;
+        }
+
+        .btn-reg-history {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 12px;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            color: var(--color-text-secondary, #9ea3b5);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-reg-history:hover {
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(56, 189, 248, 0.06);
+        }
+
+        /* ─── EMPTY STATE ─── */
+        .registry-empty {
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--color-text-secondary, #9ea3b5);
+        }
+
+        .registry-empty i {
+            font-size: 36px;
+            color: var(--color-text-muted, #6c7184);
+            margin-bottom: 14px;
+        }
+
+        .registry-empty h3 {
+            color: var(--color-text, #f0f1f5);
+            font-size: 17px;
+            margin: 0 0 6px 0;
+        }
+
+        .registry-empty p {
+            max-width: 480px;
+            margin: 0 auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        /* ─── MOBILE STACKED VIEW (480px) ─── */
+        @media (max-width: 650px) {
+            .registry-table thead {
+                display: none;
+            }
+            .registry-table, .registry-table tbody, .registry-table tr, .registry-table td {
+                display: block;
+                width: 100%;
+                box-sizing: border-box;
+            }
+            .registry-table tr {
+                border-bottom: 1px solid var(--color-border, #292c37);
+                padding: 16px;
+            }
+            .registry-table td {
+                padding: 6px 0;
+                border-bottom: none;
+            }
+            .registry-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 12px;
+            }
+            .registry-search-field {
+                width: 100%;
+                flex: none;
+            }
+            .registry-filter-select, .registry-btn-filter, .registry-btn-reset {
+                width: 100%;
+                box-sizing: border-box;
+            }
+        }
+    </style>
+
+    <div class="content-header">
+        <!-- Tab Navigation -->
+        <div class="creator-nav-tabs">
+            <a href="creators" class="creator-nav-tab">
+                <i class="fa fa-users"></i> Credits Catalog
+            </a>
+            <a href="creator_registry" class="creator-nav-tab active">
+                <i class="fa fa-id-card-o"></i> Identity Registry
+            </a>
+        </div>
+
+        <!-- Registry Header -->
+        <div class="registry-header">
+            <div>
+                <h1 class="registry-title">Creator Identity Registry</h1>
+                <p class="registry-subtitle">Searchable, filterable audit registry of recorded creator identity decisions, rejections, and conflicts.</p>
+            </div>
+        </div>
+
+        <!-- State Filter Chips -->
+        <div class="registry-filter-chips">
+            <a href="creator_registry?state=all&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}"
+               class="state-chip ${'active' if registry['state_filter'] == 'all' else ''}">
+                <span>All Decisions</span>
+                <span class="chip-count">${registry['counts']['all']}</span>
+            </a>
+            %if registry.get('counts', {}).get('transferred', 0) > 0 or registry['state_filter'] == 'transferred':
+            <a href="creator_registry?state=transferred&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}"
+               class="state-chip chip-transferred ${'active' if registry['state_filter'] == 'transferred' else ''}">
+                <i class="fa fa-exchange" style="color: #c084fc;"></i>
+                <span>Transferred</span>
+                <span class="chip-count">${registry['counts'].get('transferred', 0)}</span>
+            </a>
+            %endif
+            <a href="creator_registry?state=confirmed&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}"
+               class="state-chip chip-confirmed ${'active' if registry['state_filter'] == 'confirmed' else ''}">
+                <i class="fa fa-check-circle" style="color: #4ade80;"></i>
+                <span>Confirmed</span>
+                <span class="chip-count">${registry['counts']['confirmed']}</span>
+            </a>
+            <a href="creator_registry?state=rejected&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}"
+               class="state-chip chip-rejected ${'active' if registry['state_filter'] == 'rejected' else ''}">
+                <i class="fa fa-ban" style="color: #f87171;"></i>
+                <span>Rejected</span>
+                <span class="chip-count">${registry['counts']['rejected']}</span>
+            </a>
+            <a href="creator_registry?state=reversed&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}"
+               class="state-chip chip-reversed ${'active' if registry['state_filter'] in ('reversed', 'unresolved') else ''}">
+                <i class="fa fa-undo" style="color: #facc15;"></i>
+                <span>Reversed / Unresolved</span>
+                <span class="chip-count">${registry['counts']['reversed']}</span>
+            </a>
+            <a href="creator_registry?state=conflicted&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}"
+               class="state-chip chip-conflicted ${'active' if registry['state_filter'] == 'conflicted' else ''}">
+                <i class="fa fa-exclamation-triangle" style="color: #fb7185;"></i>
+                <span>Conflicted</span>
+                <span class="chip-count">${registry['counts']['conflicted']}</span>
+            </a>
+        </div>
+
+        <!-- Toolbar Form -->
+        <form method="GET" action="creator_registry" class="registry-toolbar" id="registry_filter_form">
+            <input type="hidden" name="state" value="${registry['state_filter']}" />
+            <div class="registry-search-field">
+                <i class="fa fa-search registry-search-icon"></i>
+                <input type="text" name="search" id="registry_search_input" value="${registry['search_query']}" placeholder="Search local name or provider identity..." />
+            </div>
+
+            <select name="provider" class="registry-filter-select">
+                <option value="all" ${'selected' if registry['provider_filter'] == 'all' else ''}>All Providers</option>
+                <option value="metron" ${'selected' if registry['provider_filter'] == 'metron' else ''}>Metron</option>
+                <option value="comicvine" ${'selected' if registry['provider_filter'] == 'comicvine' else ''}>ComicVine</option>
+            </select>
+
+            <select name="sort" class="registry-filter-select">
+                <option value="name_asc" ${'selected' if registry['current_sort'] == 'name_asc' else ''}>Name (A &rarr; Z)</option>
+                <option value="name_desc" ${'selected' if registry['current_sort'] == 'name_desc' else ''}>Name (Z &rarr; A)</option>
+                <option value="recent_desc" ${'selected' if registry['current_sort'] == 'recent_desc' else ''}>Recently Decided</option>
+                <option value="recent_asc" ${'selected' if registry['current_sort'] == 'recent_asc' else ''}>Oldest Decided</option>
+                <option value="events_desc" ${'selected' if registry['current_sort'] == 'events_desc' else ''}>Most Decision Events</option>
+            </select>
+
+            <button type="submit" class="registry-btn-filter">Filter</button>
+            %if registry['search_query'] or registry['state_filter'] != 'all' or registry['provider_filter'] != 'all' or registry['current_sort'] != 'name_asc':
+                <a href="creator_registry" class="registry-btn-reset">Reset</a>
+            %endif
+        </form>
+    </div>
+
+    <!-- Registry List / Table -->
+    <div class="registry-container">
+        %if not registry.get('entries') or len(registry['entries']) == 0:
+            <div class="registry-empty">
+                <i class="fa fa-id-badge"></i>
+                %if registry['search_query'] or registry['state_filter'] != 'all' or registry['provider_filter'] != 'all':
+                    <h3>No Matching Decisions Found</h3>
+                    <p>No recorded creator identity decisions match your filter criteria. Try clearing search filters.</p>
+                %else:
+                    <h3>No Decision History on Record</h3>
+                    <p>No creator identity decisions, rejections, or conflicts have been recorded yet. Decisions made in the Modern Issue Inspector will be listed here.</p>
+                %endif
+            </div>
+        %else:
+            <table class="registry-table" id="registry_data_table">
+                <thead>
+                    <tr>
+                        <th>Local Credit</th>
+                        <th>Target Provider</th>
+                        <th>Resolution State</th>
+                        <th>Latest Decision</th>
+                        <th>Events</th>
+                        <th>Source Context</th>
+                        <th style="text-align: right;">Audit History</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    %for rec in registry['entries']:
+                        <tr class="registry-row" data-name-record-id="${rec['name_record_id']}">
+                            <!-- Local Credit Column -->
+                            <td>
+                                <div class="reg-local-name">
+                                    <span>${html.escape(rec['raw_local_name'])}</span>
+                                </div>
+                                <div class="reg-local-id">
+                                    NameRecordID: <code>${rec['name_record_id']}</code>
+                                </div>
+                            </td>
+
+                            <!-- Target Provider Column -->
+                            <td>
+                                %if rec['provider_creator_id']:
+                                    <div class="reg-provider-target">
+                                        <span class="reg-provider-name">${html.escape(rec['provider_display_name'] or rec['raw_local_name'])}</span>
+                                        <span class="reg-provider-id">${(rec['provider'] or 'PROVIDER').upper()} ID: ${rec['provider_creator_id']}</span>
+                                    </div>
+                                %else:
+                                    <span style="color: var(--color-text-muted, #6c7184); font-size: 12px;">None Linked</span>
+                                %endif
+                            </td>
+
+                            <!-- Resolution State Column -->
+                            <td>
+                                %if rec['current_state'] == 'transferred':
+                                    <span class="reg-state-badge reg-state-transferred">
+                                        <i class="fa fa-exchange"></i> Transferred
+                                    </span>
+                                %elif rec['current_state'] == 'confirmed':
+                                    <span class="reg-state-badge reg-state-confirmed">
+                                        <i class="fa fa-check-circle"></i> Confirmed
+                                    </span>
+                                %elif rec['current_state'] == 'rejected':
+                                    <span class="reg-state-badge reg-state-rejected">
+                                        <i class="fa fa-ban"></i> Rejected
+                                    </span>
+                                %elif rec['current_state'] == 'reversed':
+                                    <span class="reg-state-badge reg-state-reversed">
+                                        <i class="fa fa-undo"></i> Reversed
+                                    </span>
+                                %elif rec['current_state'] == 'conflicted':
+                                    <span class="reg-state-badge reg-state-conflicted">
+                                        <i class="fa fa-exclamation-triangle"></i> Conflicted
+                                    </span>
+                                %else:
+                                    <span class="reg-state-badge reg-state-unresolved">
+                                        <i class="fa fa-question-circle"></i> Unresolved
+                                    </span>
+                                %endif
+                            </td>
+
+                            <!-- Latest Decision Column -->
+                            <td>
+                                %if rec['latest_decision']:
+                                    <div class="reg-decision-meta">
+                                        <span style="font-weight: 600; color: var(--color-text, #f0f1f5);">${rec['latest_decision']['action_label']}</span>
+                                        <span class="reg-actor-pill">${rec['latest_decision']['actor_label']} &bull; ${rec['latest_decision']['timestamp']}</span>
+                                    </div>
+                                %else:
+                                    <span style="color: var(--color-text-muted, #6c7184); font-size: 12px;">No recorded events</span>
+                                %endif
+                            </td>
+
+                            <!-- Decision Events Count Column -->
+                            <td>
+                                <span class="reg-event-count">
+                                    ${rec['decision_event_count']} event${'s' if rec['decision_event_count'] != 1 else ''}
+                                </span>
+                            </td>
+
+                            <!-- Source Context Column -->
+                            <td>
+                                %if rec['source_context']:
+                                    <div>
+                                        <a href="comicDetails?ComicID=${rec['source_context']['comic_id']}" class="reg-source-link" title="${html.escape(rec['source_context']['comic_name'])}">
+                                            <i class="fa fa-book"></i>
+                                            ${html.escape(rec['source_context']['comic_name'])} #${rec['source_context']['issue_number']}
+                                        </a>
+                                        <div style="font-size: 11px; color: var(--color-text-muted, #6c7184); text-transform: capitalize;">
+                                            Role: ${rec['source_context']['role']}
+                                        </div>
+                                    </div>
+                                %else:
+                                    <span style="color: var(--color-text-muted, #6c7184); font-size: 12px;">Unspecified</span>
+                                %endif
+                            </td>
+
+                            <!-- Audit History Action Column (Read-Only) -->
+                            <td style="text-align: right; white-space: nowrap;">
+                                %if rec['current_state'] == 'conflicted':
+                                    <button type="button" class="btn-reg-conflict-why"
+                                            onclick="openRegistryConflictModal(${rec['name_record_id']}, '${rec['provider'] or ''}', '${rec['provider_creator_id'] or ''}', '${html.escape(rec['raw_local_name'], quote=True)}');"
+                                            title="Explain why direct resolution is blocked">
+                                        <i class="fa fa-exclamation-triangle"></i>
+                                        <span>Why is this conflicted?</span>
+                                    </button>
+                                %endif
+                                <button type="button" class="btn-reg-history"
+                                        onclick="openRegistryHistoryModal(${rec['name_record_id']}, '${rec['provider'] or ''}', '${rec['provider_creator_id'] or ''}', '${html.escape(rec['raw_local_name'], quote=True)}');">
+                                    <i class="fa fa-history"></i>
+                                    <span>View history</span>
+                                </button>
+                            </td>
+                        </tr>
+                    %endfor
+                </tbody>
+            </table>
+        %endif
+    </div>
+
+    <!-- Pagination -->
+    %if registry.get('total_pages', 1) > 1:
+        <div class="creator-pagination">
+            <span style="font-size: 12.5px; color: var(--color-text-secondary, #9ea3b5);">
+                Showing page <strong>${registry['current_page']}</strong> of <strong>${registry['total_pages']}</strong> (${registry['total_entries']} decisions)
+            </span>
+            <div style="display: flex; gap: 6px;">
+                %if registry['has_prev']:
+                    <a href="creator_registry?state=${registry['state_filter']}&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}&page=${registry['current_page'] - 1}" class="page-btn">
+                        &laquo; Prev
+                    </a>
+                %endif
+                %for p in range(1, registry['total_pages'] + 1):
+                    <a href="creator_registry?state=${registry['state_filter']}&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}&page=${p}" class="page-btn ${'active' if p == registry['current_page'] else ''}">
+                        ${p}
+                    </a>
+                %endfor
+                %if registry['has_next']:
+                    <a href="creator_registry?state=${registry['state_filter']}&provider=${registry['provider_filter']}&search=${registry['search_query']}&sort=${registry['current_sort']}&page=${registry['current_page'] + 1}" class="page-btn">
+                        Next &raquo;
+                    </a>
+                %endif
+            </div>
+        </div>
+    %endif
+
+    <!-- ─── REUSED READ-ONLY CREATOR HISTORY MODAL (C4.11) ─── -->
+    <div id="creator_history_modal" class="chm-overlay" style="display: none;">
+        <div class="chm-dialog" role="dialog" aria-modal="true" aria-labelledby="chm_title">
+            <div class="chm-header">
+                <div class="chm-header-title" id="chm_title">
+                    <i class="fa fa-history"></i>
+                    <span>Creator Decision History</span>
+                </div>
+                <button type="button" class="chm-close-btn" onclick="closeCreatorHistoryModal();" aria-label="Close">&times;</button>
+            </div>
+            <div class="chm-body" id="chm_body">
+                <div id="chm_loading_spinner" style="text-align: center; padding: 30px; color: var(--color-text-muted, #6c7184);">
+                    <i class="fa fa-circle-o-notch fa-spin fa-2x"></i>
+                    <p style="margin-top: 10px; font-size: 13px;">Loading decision history...</p>
+                </div>
+                <div id="chm_content" style="display: none;">
+                    <div class="chm-summary-box" id="chm_summary_box">
+                        <div class="chm-summary-header">
+                            <div class="chm-summary-names">
+                                <div><span style="color: var(--color-text-muted, #6c7184); font-size: 11.5px; text-transform: uppercase;">Local Credit:</span> <strong id="chm_local_name" style="color: #f0f1f5;">-</strong> <span id="chm_name_record_id" style="color: var(--color-text-muted, #6c7184); font-size: 11.5px; font-family: monospace;">(NameRecordID: -)</span></div>
+                                <div><span style="color: var(--color-text-muted, #6c7184); font-size: 11.5px; text-transform: uppercase;">Target Provider:</span> <strong id="chm_provider_name" style="color: #f0f1f5;">-</strong> <span id="chm_provider_id" style="color: #38bdf8; font-size: 11.5px; font-family: monospace;">(-)</span></div>
+                            </div>
+                            <span class="chm-status-badge" id="chm_status_badge">UNRESOLVED</span>
+                        </div>
+                        <div class="chm-summary-text" id="chm_summary_text"></div>
+                    </div>
+
+                    <div class="chm-timeline-heading">
+                        <span>Timeline of Recorded Decisions</span>
+                        <span class="chm-timeline-count" id="chm_timeline_count">(0 events)</span>
+                    </div>
+
+                    <div class="chm-timeline" id="chm_timeline_list">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </div>
+            <div class="chm-footer">
+                <div class="chm-footer-note">
+                    <i class="fa fa-info-circle"></i>
+                    <span>Audit history is immutable and read-only. Shows past human decisions and reversals.</span>
+                </div>
+                <button type="button" class="chm-btn chm-btn-secondary" onclick="closeCreatorHistoryModal();">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        var _historyReqCounter = 0;
+
+        function openRegistryHistoryModal(nameRecordId, provider, providerCreatorId, rawName) {
+            var $modal = $('#creator_history_modal');
+            var $spinner = $('#chm_loading_spinner');
+            var $content = $('#chm_content');
+
+            $('#chm_local_name').text(rawName || 'Unknown');
+            $('#chm_name_record_id').text('(NameRecordID: ' + nameRecordId + ')');
+            $('#chm_provider_name').text(rawName || 'Provider Match');
+            $('#chm_provider_id').text(provider && providerCreatorId ? '(' + provider.toUpperCase() + ' ID: ' + providerCreatorId + ')' : '');
+
+            $spinner.show();
+            $content.hide();
+            $modal.fadeIn(150);
+
+            var thisReqId = ++_historyReqCounter;
+
+            $.ajax({
+                url: 'getCreatorDecisionHistory',
+                type: 'GET',
+                dataType: 'json',
+                data: {
+                    name_record_id: nameRecordId,
+                    provider: provider || undefined,
+                    provider_creator_id: providerCreatorId || undefined
+                },
+                success: function(resp) {
+                    if (thisReqId !== _historyReqCounter) return;
+                    $spinner.hide();
+                    $content.show();
+                    renderCreatorHistoryTimeline(resp);
+                },
+                error: function(xhr) {
+                    if (thisReqId !== _historyReqCounter) return;
+                    $spinner.hide();
+                    $content.show();
+                    var errMsg = 'Unable to load decision history.';
+                    try {
+                        var errObj = JSON.parse(xhr.responseText);
+                        if (errObj && errObj.error) errMsg = errObj.error;
+                    } catch(e){}
+                    $('#chm_timeline_list').html('<div class="chm-empty-state"><i class="fa fa-exclamation-triangle" style="color: #ef4444;"></i><h4>Failed to Load History</h4><p>' + $('<div>').text(errMsg).html() + '</p></div>');
+                }
+            });
+        }
+
+        function renderCreatorHistoryTimeline(data) {
+            var $list = $('#chm_timeline_list');
+            $list.empty();
+
+            if (!data || !data.success) {
+                $list.html('<div class="chm-empty-state"><i class="fa fa-info-circle"></i><h4>No Data Available</h4><p>Unable to retrieve history records.</p></div>');
+                return;
+            }
+
+            var currState = data.current_state || {};
+            var status = (currState.status || 'unresolved').toUpperCase();
+            var stLower = (currState.status || 'unresolved').toLowerCase();
+            var $badge = $('#chm_status_badge');
+            $badge.text(status);
+            $badge.removeClass('confirmed rejected reversed conflicted unresolved transferred badge-confirmed badge-rejected badge-reversed badge-conflicted badge-unresolved badge-transferred');
+            $badge.addClass(stLower);
+            if (stLower === 'transferred') $badge.addClass('badge-transferred');
+            else if (stLower === 'confirmed') $badge.addClass('badge-confirmed');
+            else if (stLower === 'rejected') $badge.addClass('badge-rejected');
+            else if (stLower === 'reversed') $badge.addClass('badge-reversed');
+            else if (stLower === 'conflicted') $badge.addClass('badge-conflicted');
+            else $badge.addClass('badge-unresolved');
+
+            $('#chm_summary_text').text(data.explanation_summary || '');
+            var count = data.total_events || 0;
+            $('#chm_timeline_count').text('(' + count + ' event' + (count !== 1 ? 's' : '') + ')');
+
+            if (!data.timeline || data.timeline.length === 0) {
+                $list.html(
+                    '<div class="chm-empty-state">' +
+                    '<i class="fa fa-info-circle"></i>' +
+                    '<h4>No Decision History on Record</h4>' +
+                    '<p>No explicit decisions or suppression events have been recorded for this local credit. It remains unlinked and in candidate review.</p>' +
+                    '</div>'
+                );
+                return;
+            }
+
+            $.each(data.timeline, function(idx, ev) {
+                var actionClass = 'badge-action-confirmed';
+                if (ev.action === 'REJECT_CANDIDATE') actionClass = 'badge-action-rejected';
+                else if (ev.action.indexOf('REVERSE') !== -1) actionClass = 'badge-action-reversed';
+                else if (ev.action.indexOf('COLLISION') !== -1) actionClass = 'badge-action-conflicted';
+
+                var revHtml = '';
+                if (ev.reversal_info && ev.reversal_info.reverses_action) {
+                    var revLabel = ev.reversal_info.reverses_action === 'CONFIRM_PROVIDER_IDENTITY' ? 'previous confirmation' : 'previous rejection';
+                    revHtml = '<div class="chm-reversal-tag"><i class="fa fa-undo"></i> Reverses ' + revLabel + '</div>';
+                }
+
+                var cardHtml =
+                    '<div class="chm-event-card">' +
+                    '  <div class="chm-event-header">' +
+                    '    <div class="chm-event-badges">' +
+                    '      <span class="chm-action-badge ' + actionClass + '">' + $('<div>').text(ev.action_label || ev.action).html() + '</span>' +
+                    '      <span class="chm-event-seq">#' + (idx + 1) + '</span>' +
+                    '    </div>' +
+                    '    <div class="chm-event-meta">' +
+                    '      <span class="chm-event-actor">' + $('<div>').text(ev.actor_label || ev.actor).html() + '</span>' +
+                    '      <span class="chm-event-dot">&bull;</span>' +
+                    '      <span class="chm-event-time">' + $('<div>').text(ev.timestamp || '').html() + '</span>' +
+                    '    </div>' +
+                    '  </div>' +
+                    '  <div class="chm-event-explanation">' + $('<div>').text(ev.explanation || '').html() + '</div>' +
+                    revHtml +
+                    '  <div class="chm-event-audit-id">AuditID: ' + (ev.audit_id || '-') + '</div>' +
+                    '</div>';
+
+                $list.append(cardHtml);
+            });
+        }
+
+        function closeCreatorHistoryModal() {
+            $('#creator_history_modal').fadeOut(120);
+        }
+
+        var _registryConflictReqCounter = 0;
+
+        function openRegistryConflictModal(nameRecordId, provider, providerCreatorId, rawName) {
+            var $modal = $('#creator_conflict_modal');
+            var $spinner = $('#ccm_loading_spinner');
+            var $content = $('#ccm_content_area');
+            var $loading = $('#ccm_loading_spinner');
+            var $error = $('#ccm_error_area');
+            var $noConflict = $('#ccm_no_conflict_area');
+            var $content = $('#ccm_content_area');
+
+            // Reset modal DOM to State 1: Loading
+            $error.hide();
+            $noConflict.hide();
+            $content.hide();
+            $('#ccm_history_link_container').hide();
+            $loading.show();
+            $modal.fadeIn(150);
+
+            // Set up Decision History link button
+            $('#ccm_btn_open_history').off('click').on('click', function() {
+                closeRegistryConflictModal();
+                openRegistryHistoryModal(nameRecordId, provider, providerCreatorId, rawName);
+            });
+
+            var thisReqId = ++_registryConflictReqCounter;
+
+            $.ajax({
+                url: 'getCreatorConflictAnalysis',
+                type: 'GET',
+                dataType: 'json',
+                data: {
+                    name_record_id: nameRecordId,
+                    provider: provider || undefined,
+                    provider_creator_id: providerCreatorId || undefined
+                },
+                success: function(resp) {
+                    if (thisReqId !== _registryConflictReqCounter) return;
+                    if (!resp || !resp.success) {
+                        var err = (resp && resp.error) ? resp.error : 'Failed to load conflict analysis.';
+                        renderRegistryConflictErrorState(err);
+                        return;
+                    }
+                    if (!resp.is_conflicted || resp.conflict_type === 'NO_ACTIVE_CONFLICT') {
+                        renderRegistryNoActiveConflictState(resp, rawName, nameRecordId, provider, providerCreatorId);
+                        return;
+                    }
+                    renderRegistryConflictContent(resp, rawName, nameRecordId, provider, providerCreatorId);
+                },
+                error: function(xhr) {
+                    if (thisReqId !== _registryConflictReqCounter) return;
+                    var errMsg = 'Unable to analyze creator identity conflict.';
+                    try {
+                        var errObj = JSON.parse(xhr.responseText);
+                        if (errObj && errObj.error) errMsg = errObj.error;
+                    } catch(e){}
+                    renderRegistryConflictErrorState(errMsg);
+                }
+            });
+        }
+
+        var _registryConflictData = null;
+        var _registryConflictFallbackName = null;
+        var _registryConflictFallbackId = null;
+        var _registryConflictFallbackProv = null;
+        var _registryConflictFallbackExtId = null;
+
+        function renderRegistryConflictErrorState(errMsg) {
+            $('#ccm_loading_spinner').hide();
+            $('#ccm_no_conflict_area').hide();
+            $('#ccm_confirm_area').hide();
+            $('#ccm_transfer_confirm_area').hide();
+            $('#ccm_content_area').hide();
+            $('#ccm_history_link_container').hide();
+            $('#ccm_btn_reject_competing').hide();
+            $('#ccm_btn_transfer_mapping').hide();
+            $('#ccm_error_message').text(errMsg || 'Conflict analysis is unavailable for the requested record.');
+            $('#ccm_error_area').show();
+        }
+
+        function renderRegistryNoActiveConflictState(data, fallbackName, fallbackId, fallbackProv, fallbackExtId) {
+            $('#ccm_loading_spinner').hide();
+            $('#ccm_error_area').hide();
+            $('#ccm_confirm_area').hide();
+            $('#ccm_transfer_confirm_area').hide();
+            $('#ccm_content_area').hide();
+            $('#ccm_btn_reject_competing').hide();
+            $('#ccm_btn_transfer_mapping').hide();
+
+            var req = (data && data.requested_record) ? data.requested_record : {};
+            var prov = (data && data.target_provider) ? data.target_provider : {};
+            var reqName = req.raw_local_name || fallbackName || 'Unknown Record';
+            var reqId = req.name_record_id || fallbackId || '-';
+            var provName = prov.provider_display_name || reqName;
+            var provNs = (prov.provider || fallbackProv || 'METRON').toUpperCase();
+            var provId = prov.provider_creator_id || fallbackExtId || '-';
+
+            $('#ccm_no_conflict_message').text(
+                'The local creator credit "' + reqName + '" (NameRecordID: ' + reqId + ') ' +
+                'and provider record "' + provName + '" (' + provNs + ' ID: ' + provId + ') ' +
+                'are not currently in an active conflicted state.'
+            );
+
+            var detailText = 'Current local resolution state: ' + (req.resolution_source || 'unresolved') + '.';
+            if (req.linked_entity_name) {
+                detailText += ' Linked to Entity #' + req.linked_entity_id + ' (' + req.linked_entity_name + ').';
+            }
+            $('#ccm_no_conflict_detail').text(detailText);
+
+            $('#ccm_no_conflict_area').show();
+            $('#ccm_history_link_container').show();
+        }
+
+        function renderRegistryConflictContent(data, fallbackName, fallbackId, fallbackProv, fallbackExtId) {
+            _registryConflictData = data;
+            _registryConflictFallbackName = fallbackName;
+            _registryConflictFallbackId = fallbackId;
+            _registryConflictFallbackProv = fallbackProv;
+            _registryConflictFallbackExtId = fallbackExtId;
+
+            $('#ccm_loading_spinner').hide();
+            $('#ccm_error_area').hide();
+            $('#ccm_no_conflict_area').hide();
+            $('#ccm_confirm_area').hide();
+            $('#ccm_transfer_confirm_area').hide();
+
+            var req = data.requested_record || {};
+            var prov = data.target_provider || {};
+            var comp = data.competing_mapping;
+
+            // Col 1: Requested Local Record
+            $('#ccm_req_name').text(req.raw_local_name || fallbackName || '-');
+            $('#ccm_req_id').text(req.name_record_id || fallbackId || '-');
+            if (req.linked_entity_name) {
+                $('#ccm_req_link_status').html('Linked to Entity #' + $('<div>').text(String(req.linked_entity_id)).html() + ' (' + $('<div>').text(req.linked_entity_name).html() + ')');
+            } else {
+                $('#ccm_req_link_status').text('Currently Unlinked');
+            }
+
+            // Col 2: Provider Identity
+            var provName = prov.provider_display_name || req.raw_local_name || fallbackName || '-';
+            var provNs = (prov.provider || fallbackProv || 'METRON').toUpperCase();
+            var provId = prov.provider_creator_id || fallbackExtId || '-';
+            $('#ccm_prov_name').text(provName);
+            $('#ccm_prov_badge').text(provNs + ' ID: ' + provId);
+
+            // Col 3: Competing Mapping
+            if (comp) {
+                $('#ccm_comp_name').text(comp.competing_entity_name || 'Competing Creator Entity');
+                $('#ccm_comp_id').text(comp.competing_entity_id || '-');
+                var compStatus = 'Bound to ' + (comp.provider || 'Provider').toUpperCase() + ' ID ' + (comp.bound_external_id || provId);
+                if (comp.competing_name_records && comp.competing_name_records.length > 0) {
+                    compStatus += ' (' + comp.competing_name_records.length + ' other credit' + (comp.competing_name_records.length !== 1 ? 's' : '') + ')';
+                }
+                $('#ccm_comp_link_status').text(compStatus);
+                $('#ccm_comp_card').show();
+            } else {
+                $('#ccm_comp_name').text('No Other Mapping');
+                $('#ccm_comp_id').text('None');
+                $('#ccm_comp_link_status').text('No competing local entity is currently bound to this provider ID.');
+            }
+
+            // Blocking Reason
+            $('#ccm_blocking_reason').text(data.blocking_reason || 'Direct resolution is blocked.');
+            $('#ccm_blocking_explanation').text(data.explanation || '');
+
+            // Audit References
+            var audits = data.audit_references || [];
+            var $auditList = $('#ccm_audit_list').empty();
+            if (audits.length > 0) {
+                $.each(audits, function(idx, a) {
+                    var aHtml = '<div class="ccm-audit-item">' +
+                        '<div class="ccm-audit-badge-row">' +
+                            '<span class="ccm-audit-action">' + $('<div>').text(a.action_label || a.action).html() + '</span>' +
+                            '<span class="ccm-audit-actor">' + $('<div>').text(a.actor_label || a.actor).html() + ' &bull; ' + $('<div>').text(a.timestamp || '').html() + '</span>' +
+                        '</div>' +
+                        '<div class="ccm-audit-reason">' + $('<div>').text(a.reason || '').html() + '</div>' +
+                        (a.audit_id ? '<div class="ccm-audit-id">AuditID: <code>' + $('<div>').text(String(a.audit_id)).html() + '</code></div>' : '') +
+                    '</div>';
+                    $auditList.append(aHtml);
+                });
+                $('#ccm_audit_section').show();
+            } else {
+                $('#ccm_audit_section').hide();
+            }
+
+            $('#ccm_history_link_container').show();
+            $('#ccm_btn_reject_competing').show();
+            $('#ccm_btn_transfer_mapping').show();
+            $('#ccm_content_area').show();
+        }
+
+        function confirmRegistryRejectCompetingPairing() {
+            if (!_registryConflictData) return;
+            var req = _registryConflictData.requested_record || {};
+            var prov = _registryConflictData.target_provider || {};
+            var comp = _registryConflictData.competing_mapping;
+
+            var reqName = req.raw_local_name || _registryConflictFallbackName || '-';
+            var reqId = req.name_record_id || _registryConflictFallbackId || '-';
+            var provName = prov.provider_display_name || reqName;
+            var provNs = (prov.provider || _registryConflictFallbackProv || 'METRON').toUpperCase();
+            var provId = prov.provider_creator_id || _registryConflictFallbackExtId || '-';
+
+            $('#ccm_conf_req_name').text(reqName);
+            $('#ccm_conf_req_id').text(reqId);
+            $('#ccm_conf_prov_name').text(provName);
+            $('#ccm_conf_prov_id').text(provNs + ' ID: ' + provId);
+
+            if (comp) {
+                $('#ccm_conf_comp_name').text(comp.competing_entity_name || 'Competing Entity');
+                $('#ccm_conf_comp_id').text(comp.competing_entity_id || '-');
+            } else {
+                $('#ccm_conf_comp_name').text('Existing Entity');
+                $('#ccm_conf_comp_id').text('-');
+            }
+
+            $('#ccm_content_area').hide();
+            $('#ccm_history_link_container').hide();
+            $('#ccm_btn_reject_competing').hide();
+            $('#ccm_btn_transfer_mapping').hide();
+            $('#ccm_confirm_area').show();
+        }
+
+        function cancelRegistryConflictConfirmation() {
+            $('#ccm_confirm_area').hide();
+            $('#ccm_content_area').show();
+            $('#ccm_history_link_container').show();
+            if (_registryConflictData && _registryConflictData.is_conflicted) {
+                $('#ccm_btn_reject_competing').show();
+                $('#ccm_btn_transfer_mapping').show();
+            }
+        }
+
+        function confirmRegistryTransferMapping() {
+            if (!_registryConflictData) return;
+            var req = _registryConflictData.requested_record || {};
+            var prov = _registryConflictData.target_provider || {};
+            var comp = _registryConflictData.competing_mapping;
+
+            var reqName = req.raw_local_name || _registryConflictFallbackName || '-';
+            var reqId = req.name_record_id || _registryConflictFallbackId || '-';
+            var provName = prov.provider_display_name || reqName;
+            var provNs = (prov.provider || _registryConflictFallbackProv || 'METRON').toUpperCase();
+            var provId = prov.provider_creator_id || _registryConflictFallbackExtId || '-';
+
+            var srcName = comp ? (comp.competing_entity_name || 'Current Entity') : 'Current Entity';
+            var srcId = comp ? (comp.competing_entity_id || '-') : '-';
+            var hasDest = Boolean(req.linked_entity_id);
+            var destName = hasDest ? (req.linked_entity_name || reqName) : 'Unlinked (Transfer Unavailable)';
+            var destId = hasDest ? req.linked_entity_id : 'None';
+
+            $('#ccm_trans_req_name').text(reqName);
+            $('#ccm_trans_req_id').text(reqId);
+            $('#ccm_trans_prov_name').text(provName);
+            $('#ccm_trans_prov_id').text(provNs + ' ID: ' + provId);
+            $('#ccm_trans_source_name').text(srcName);
+            $('#ccm_trans_source_id').text(srcId);
+            $('#ccm_trans_dest_name').text(destName);
+            $('#ccm_trans_dest_id').text(destId);
+
+            if (!hasDest) {
+                $('#ccm_trans_warning').html('<strong>Transfer unavailable:</strong> This competing credit is unlinked. You must link this credit to an existing creator entity before transferring provider mappings.').addClass('error-warning');
+                $('#ccm_btn_submit_transfer').prop('disabled', true).addClass('disabled').css('opacity', '0.5');
+            } else {
+                $('#ccm_trans_warning').text('This is an explicit human transfer. It changes which local entity owns this provider ID.').removeClass('error-warning');
+                $('#ccm_btn_submit_transfer').prop('disabled', false).removeClass('disabled').css('opacity', '1');
+            }
+
+            $('#ccm_content_area').hide();
+            $('#ccm_history_link_container').hide();
+            $('#ccm_btn_reject_competing').hide();
+            $('#ccm_btn_transfer_mapping').hide();
+            $('#ccm_transfer_confirm_area').show();
+        }
+
+        function cancelRegistryTransferConfirmation() {
+            $('#ccm_transfer_confirm_area').hide();
+            $('#ccm_content_area').show();
+            $('#ccm_history_link_container').show();
+            if (_registryConflictData && _registryConflictData.is_conflicted) {
+                $('#ccm_btn_reject_competing').show();
+                $('#ccm_btn_transfer_mapping').show();
+            }
+        }
+
+        function submitRegistryConflictRejectCompeting() {
+            if (!_registryConflictData) return;
+            var req = _registryConflictData.requested_record || {};
+            var prov = _registryConflictData.target_provider || {};
+            var nameRecordId = req.name_record_id || _registryConflictFallbackId;
+            var provider = prov.provider || _registryConflictFallbackProv || 'metron';
+            var providerCreatorId = prov.provider_creator_id || _registryConflictFallbackExtId;
+
+            var $btn = $('#ccm_btn_submit_reject_competing');
+            $btn.prop('disabled', true).text('Confirming…');
+
+            $.ajax({
+                type: 'GET',
+                url: 'getCreatorCSRFToken',
+                dataType: 'json',
+                success: function(csrfRes) {
+                    var token = csrfRes && csrfRes.csrf_token ? csrfRes.csrf_token : '';
+                    $.ajax({
+                        type: 'POST',
+                        url: 'resolveCreatorConflict',
+                        data: {
+                            name_record_id: nameRecordId,
+                            provider: provider,
+                            provider_creator_id: providerCreatorId,
+                            action: 'keep_existing_reject_competing',
+                            csrf_token: token
+                        },
+                        dataType: 'json',
+                        headers: {
+                            'X-CSRF-Token': token
+                        },
+                        success: function(res) {
+                            $btn.prop('disabled', false).text('Confirm Decision');
+                            if (res && res.success) {
+                                closeRegistryConflictModal();
+                                if (typeof fetchRegistryRows === 'function') {
+                                    fetchRegistryRows();
+                                }
+                            } else {
+                                var errMsg = (res && res.error) ? res.error : 'Failed to resolve conflict.';
+                                $('#ccm_confirm_area').hide();
+                                renderRegistryConflictErrorState(errMsg);
+                            }
+                        },
+                        error: function(xhr) {
+                            $btn.prop('disabled', false).text('Confirm Decision');
+                            var errMsg = 'Unable to resolve creator identity conflict.';
+                            try {
+                                var errObj = JSON.parse(xhr.responseText);
+                                if (errObj && errObj.error) errMsg = errObj.error;
+                            } catch(e) {}
+                            $('#ccm_confirm_area').hide();
+                            renderRegistryConflictErrorState(errMsg);
+                        }
+                    });
+                },
+                error: function() {
+                    $btn.prop('disabled', false).text('Confirm Decision');
+                    $('#ccm_confirm_area').hide();
+                    renderRegistryConflictErrorState('Failed to obtain security token.');
+                }
+            });
+        }
+
+        function submitRegistryTransferMapping() {
+            if (!_registryConflictData) return;
+            var req = _registryConflictData.requested_record || {};
+            var prov = _registryConflictData.target_provider || {};
+            var nameRecordId = req.name_record_id || _registryConflictFallbackId;
+            var provider = prov.provider || _registryConflictFallbackProv || 'metron';
+            var providerCreatorId = prov.provider_creator_id || _registryConflictFallbackExtId;
+
+            var $btn = $('#ccm_btn_submit_transfer');
+            $btn.prop('disabled', true).text('Transferring…');
+
+            $.ajax({
+                type: 'GET',
+                url: 'getCreatorCSRFToken',
+                dataType: 'json',
+                success: function(csrfRes) {
+                    var token = csrfRes && csrfRes.csrf_token ? csrfRes.csrf_token : '';
+                    $.ajax({
+                        type: 'POST',
+                        url: 'resolveCreatorConflict',
+                        data: {
+                            name_record_id: nameRecordId,
+                            provider: provider,
+                            provider_creator_id: providerCreatorId,
+                            action: 'transfer_mapping',
+                            csrf_token: token
+                        },
+                        dataType: 'json',
+                        headers: {
+                            'X-CSRF-Token': token
+                        },
+                        success: function(res) {
+                            $btn.prop('disabled', false).text('Confirm Transfer');
+                            if (res && res.success) {
+                                closeRegistryConflictModal();
+                                if (typeof fetchRegistryRows === 'function') {
+                                    fetchRegistryRows();
+                                }
+                            } else {
+                                var errMsg = (res && res.error) ? res.error : 'Failed to transfer mapping.';
+                                $('#ccm_transfer_confirm_area').hide();
+                                renderRegistryConflictErrorState(errMsg);
+                            }
+                        },
+                        error: function(xhr) {
+                            $btn.prop('disabled', false).text('Confirm Transfer');
+                            var errMsg = 'Unable to transfer provider mapping.';
+                            try {
+                                var errObj = JSON.parse(xhr.responseText);
+                                if (errObj && errObj.error) errMsg = errObj.error;
+                            } catch(e) {}
+                            $('#ccm_transfer_confirm_area').hide();
+                            renderRegistryConflictErrorState(errMsg);
+                        }
+                    });
+                },
+                error: function() {
+                    $btn.prop('disabled', false).text('Confirm Transfer');
+                    $('#ccm_transfer_confirm_area').hide();
+                    renderRegistryConflictErrorState('Failed to obtain security token.');
+                }
+            });
+        }
+
+        function closeRegistryConflictModal() {
+            $('#creator_conflict_modal').fadeOut(120);
+            _registryConflictData = null;
+        }
+
+        $(document).keydown(function(e) {
+            if (e.keyCode === 27) { // ESC key
+                closeCreatorHistoryModal();
+                closeRegistryConflictModal();
+            }
+        });
+    </script>
+
+    <!-- ─── READ-ONLY CREATOR IDENTITY CONFLICT ANALYSIS MODAL (C4.13) ─── -->
+    <div id="creator_conflict_modal" class="ccm-overlay" style="display: none;">
+        <div class="ccm-dialog" role="dialog" aria-modal="true" aria-labelledby="ccm_title">
+            <div class="ccm-header">
+                <div class="ccm-header-title" id="ccm_title">
+                    <i class="fa fa-exclamation-triangle" style="color: #fb7185;"></i>
+                    <span>Creator Identity Conflict Analysis</span>
+                </div>
+                <button type="button" class="ccm-close-btn" onclick="closeRegistryConflictModal();" aria-label="Close">&times;</button>
+            </div>
+            <div class="ccm-body">
+                <!-- State 1: Loading -->
+                <div id="ccm_loading_spinner" class="ccm-loading" style="display: none;">
+                    <div class="ccm-spinner"></div>
+                    <span>Analyzing recorded conflict state...</span>
+                </div>
+
+                <!-- State 4: Unavailable / Error -->
+                <div id="ccm_error_area" class="ccm-error-area" style="display: none;">
+                    <div class="ccm-error-card">
+                        <div class="ccm-error-icon">
+                            <i class="fa fa-exclamation-circle" style="font-size: 20px;"></i>
+                        </div>
+                        <div class="ccm-error-title">Conflict Analysis Unavailable</div>
+                        <div class="ccm-error-message" id="ccm_error_message">Unable to retrieve conflict analysis.</div>
+                    </div>
+                </div>
+
+                <!-- State 3: No Active Conflict -->
+                <div id="ccm_no_conflict_area" class="ccm-no-conflict-area" style="display: none;">
+                    <div class="ccm-no-conflict-card">
+                        <div class="ccm-no-conflict-icon">
+                            <i class="fa fa-check-circle" style="font-size: 20px;"></i>
+                        </div>
+                        <div class="ccm-no-conflict-title">No Active Conflict Recorded</div>
+                        <div class="ccm-no-conflict-message" id="ccm_no_conflict_message">The requested creator credit pairing is not currently in a conflicted state.</div>
+                        <div class="ccm-no-conflict-detail" id="ccm_no_conflict_detail"></div>
+                    </div>
+                </div>
+
+                <!-- State 2: Active Conflict Analysis -->
+                <div id="ccm_content_area" style="display: none;">
+                    <!-- Competing Claims Grid -->
+                    <div class="ccm-claims-grid">
+                        <!-- Claim 1: Requested Local Record -->
+                        <div class="ccm-claim-card">
+                            <div class="ccm-claim-header">
+                                <span class="ccm-claim-tag">Requested Local Credit</span>
+                            </div>
+                            <div class="ccm-claim-name" id="ccm_req_name">-</div>
+                            <div class="ccm-claim-id">NameRecordID: <code id="ccm_req_id">-</code></div>
+                            <div class="ccm-claim-link-status" id="ccm_req_link_status">Currently Unlinked</div>
+                        </div>
+
+                        <!-- Provider Identity -->
+                        <div class="ccm-claim-card ccm-claim-provider">
+                            <div class="ccm-claim-header">
+                                <span class="ccm-claim-tag">Target Provider Identity</span>
+                            </div>
+                            <div class="ccm-claim-name" id="ccm_prov_name">-</div>
+                            <div class="ccm-claim-id"><span id="ccm_prov_badge" class="ccm-prov-badge">METRON ID: -</span></div>
+                            <div class="ccm-claim-link-status">Provider-reported identity</div>
+                        </div>
+
+                        <!-- Claim 2: Competing Local Mapping -->
+                        <div class="ccm-claim-card ccm-claim-competing" id="ccm_comp_card">
+                            <div class="ccm-claim-header">
+                                <span class="ccm-claim-tag">Existing Competing Mapping</span>
+                            </div>
+                            <div class="ccm-claim-name" id="ccm_comp_name">-</div>
+                            <div class="ccm-claim-id">CreatorEntityID: <code id="ccm_comp_id">-</code></div>
+                            <div class="ccm-claim-link-status" id="ccm_comp_link_status">Bound to Provider Target</div>
+                        </div>
+                    </div>
+
+                    <!-- Blocking Reason Box -->
+                    <div class="ccm-blocking-box">
+                        <div class="ccm-blocking-title">
+                            <i class="fa fa-ban"></i>
+                            <span>Why Direct Resolution Is Blocked</span>
+                        </div>
+                        <div class="ccm-blocking-reason" id="ccm_blocking_reason"></div>
+                        <div class="ccm-blocking-explanation" id="ccm_blocking_explanation"></div>
+                    </div>
+
+                    <!-- Audit References Area -->
+                    <div id="ccm_audit_section" style="display: none; margin-top: 14px;">
+                        <div class="ccm-section-heading">Recorded Collision Events</div>
+                        <div id="ccm_audit_list" class="ccm-audit-list"></div>
+                    </div>
+
+                    <!-- Notice Banner -->
+                    <div class="ccm-notice-banner">
+                        <i class="fa fa-info-circle"></i>
+                        <span>Evidence and recorded state only. You can choose to keep the existing mapping and reject this competing candidate pairing.</span>
+                    </div>
+                </div>
+
+                <!-- State 5: Confirmation Dialog - Reject Competing (C4.15) -->
+                <div id="ccm_confirm_area" class="ccm-confirm-container" style="display: none;">
+                    <div class="ccm-confirm-card">
+                        <div class="ccm-confirm-header">
+                            <i class="fa fa-exclamation-triangle"></i>
+                            <span>Confirm Explicit Conflict Resolution</span>
+                        </div>
+                        <div class="ccm-confirm-grid">
+                            <div class="ccm-confirm-row">
+                                <span class="ccm-confirm-label">Competing Local Credit:</span>
+                                <span class="ccm-confirm-value"><span id="ccm_conf_req_name">-</span> (NameRecordID: <code id="ccm_conf_req_id">-</code>)</span>
+                            </div>
+                            <div class="ccm-confirm-row">
+                                <span class="ccm-confirm-label">Target Provider Identity:</span>
+                                <span class="ccm-confirm-value"><span id="ccm_conf_prov_name">-</span> (<span id="ccm_conf_prov_id">-</span>)</span>
+                            </div>
+                            <div class="ccm-confirm-row">
+                                <span class="ccm-confirm-label">Preserved Existing Mapping:</span>
+                                <span class="ccm-confirm-value"><span id="ccm_conf_comp_name">-</span> (CreatorEntityID: <code id="ccm_conf_comp_id">-</code>)</span>
+                            </div>
+                        </div>
+                        <div class="ccm-confirm-statement">
+                            This is an explicit human decision. The existing mapping will remain unchanged.
+                        </div>
+                        <div class="ccm-confirm-actions">
+                            <button type="button" class="ccm-btn ccm-btn-cancel-action" onclick="cancelRegistryConflictConfirmation();">Cancel</button>
+                            <button type="button" class="ccm-btn ccm-btn-confirm-action" id="ccm_btn_submit_reject_competing" onclick="submitRegistryConflictRejectCompeting();">Confirm Decision</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State 6: Confirmation Dialog - Transfer Mapping (C4.16) -->
+                <div id="ccm_transfer_confirm_area" class="ccm-confirm-container" style="display: none;">
+                    <div class="ccm-confirm-card" style="background: rgba(168, 85, 247, 0.06); border-color: rgba(168, 85, 247, 0.4);">
+                        <div class="ccm-confirm-header" style="color: #c084fc;">
+                            <i class="fa fa-exchange"></i>
+                            <span>Confirm Provider Mapping Transfer</span>
+                        </div>
+                        <div class="ccm-confirm-grid">
+                            <div class="ccm-confirm-row">
+                                <span class="ccm-confirm-label">Competing Local Credit:</span>
+                                <span class="ccm-confirm-value"><span id="ccm_trans_req_name">-</span> (NameRecordID: <code id="ccm_trans_req_id">-</code>)</span>
+                            </div>
+                            <div class="ccm-confirm-row">
+                                <span class="ccm-confirm-label">Target Provider Identity:</span>
+                                <span class="ccm-confirm-value"><span id="ccm_trans_prov_name">-</span> (<span id="ccm_trans_prov_id">-</span>)</span>
+                            </div>
+                            <div class="ccm-confirm-row">
+                                <span class="ccm-confirm-label">Current Owner (Losing Mapping):</span>
+                                <span class="ccm-confirm-value"><span id="ccm_trans_source_name">-</span> (CreatorEntityID: <code id="ccm_trans_source_id">-</code>)</span>
+                            </div>
+                            <div class="ccm-confirm-row">
+                                <span class="ccm-confirm-label">Target Owner (Gaining Mapping):</span>
+                                <span class="ccm-confirm-value"><span id="ccm_trans_dest_name">-</span> (CreatorEntityID: <code id="ccm_trans_dest_id">-</code>)</span>
+                            </div>
+                        </div>
+                        <div class="ccm-confirm-warning" id="ccm_trans_warning">
+                            This is an explicit human transfer. It changes which local entity owns this provider ID.
+                        </div>
+                        <div class="ccm-confirm-actions">
+                            <button type="button" class="ccm-btn ccm-btn-cancel-action" onclick="cancelRegistryTransferConfirmation();">Cancel</button>
+                            <button type="button" class="ccm-btn ccm-btn-confirm-transfer" id="ccm_btn_submit_transfer" onclick="submitRegistryTransferMapping();">Confirm Transfer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="ccm-footer">
+                <div class="ccm-footer-history-link" id="ccm_history_link_container" style="display: none;">
+                    <button type="button" class="btn-reg-history" id="ccm_btn_open_history">
+                        <i class="fa fa-history"></i>
+                        <span>View Decision History</span>
+                    </button>
+                </div>
+                <div class="ccm-btn-group" id="ccm_footer_btn_group">
+                    <button type="button" class="ccm-btn ccm-btn-transfer-mapping" id="ccm_btn_transfer_mapping" style="display: none;" onclick="confirmRegistryTransferMapping();">Transfer Provider Mapping</button>
+                    <button type="button" class="ccm-btn ccm-btn-reject-competing" id="ccm_btn_reject_competing" style="display: none;" onclick="confirmRegistryRejectCompetingPairing();">Keep Existing Mapping &amp; Reject Candidate</button>
+                    <button type="button" class="ccm-btn ccm-btn-close" onclick="closeRegistryConflictModal();">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</%def>

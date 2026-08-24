@@ -1,0 +1,665 @@
+<%inherit file="base.html"/>
+<%!
+	from mylar import helpers, db
+        import datetime
+        import decimal
+%>
+
+<%def name="body()">
+        <input type="hidden" id="page_name" value="index" />
+        
+        <div class="page-header">
+            <div class="page-header-body">
+                <h1 class="page-title">Library</h1>
+                <p class="page-subtitle">Manage monitored series, track issue releases, and oversee collection completion.</p>
+            </div>
+            <div class="page-header-actions">
+                <div class="shelf-sort-control" id="shelfSortControl" style="display:none;">
+                    <label for="shelfSortField" class="shelf-sort-label">Sort:</label>
+                    <div class="shelf-sort-select-wrapper">
+                        <select id="shelfSortField" class="shelf-sort-select">
+                            <option value="1">Title</option>
+                            <option value="0">Publisher</option>
+                            <option value="2">Year</option>
+                            <option value="3">Last Issue</option>
+                            <option value="4">Published</option>
+                            <option value="5">Collection Progress</option>
+                            <option value="7">Status</option>
+                        </select>
+                    </div>
+                    <button type="button" class="shelf-sort-dir-btn" id="shelfSortDir" data-dir="asc" title="Sort Ascending">
+                        <svg class="sort-icon-asc" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                        <svg class="sort-icon-desc" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                        <span id="shelfSortDirLabel">ASC</span>
+                    </button>
+                </div>
+                <div class="view-toggle" id="libraryViewToggle">
+                    <button type="button" class="view-toggle-btn active" id="viewBtnList" data-mode="list" title="Table list view">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        <span>List</span>
+                    </button>
+                    <button type="button" class="view-toggle-btn" id="viewBtnShelf" data-mode="shelf" title="Cover shelf view">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        <span>Shelf</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table_wrapper view-mode--list" id="series_table_wrapper">
+            % if alphaindex:
+            <div class="alpha-index-wrapper">
+                <div class="alphabet" id="alphabetSearch"></div>
+            </div>
+            % endif
+	<table class="display" id="series_table">
+	    <thead>
+	        <tr>
+		    <th id="publisher">Publisher</th>
+		    <th id="name">Comic</th>
+                    <th id="year">Year</th>
+		    <th id="issue">Last Issue</th>
+                    <th id="published">Published</th>
+                    <th id="have">Have</th>
+                    <th id="status">Status</th>
+                    <th id="active">Active</th>
+	        </tr>
+	    </thead>
+            <tbody>
+            </tbody>
+	</table>
+
+        <div id="library_shelf_guardrail" style="display:none;"></div>
+        <div id="library_shelf_grid" class="library-shelf-grid" style="display:none;"></div>
+      </div>
+      <div class="legend-container">
+        <div class="legend-list">
+            <span class="legend-heading">Row Status:</span>
+            <div class="legend-chip" id="legend_removed"><span class="legend-swatch" style="background:${legend_colors['removed']};" title="Series has been removed from CV"></span> CV Removed</div>
+            <div class="legend-chip" id="legend_paused"><span class="legend-swatch" style="background:${legend_colors['paused']};" title="Series is Paused"></span> Paused</div>
+            <div class="legend-chip" id="legend_failed"><span class="legend-swatch" style="background:${legend_colors['failed']};" title="Series was unable to complete adding/refreshing"></span> Failed / Error</div>
+            <div class="legend-chip" id="legend_loading"><span class="legend-swatch" style="background:${legend_colors['loading']};" title="Loading information state"></span> Loading</div>
+        </div>
+      </div>
+</%def>
+
+<%def name="headIncludes()">
+        <link rel="stylesheet" href="interfaces/${interface}/css/data_table.css">
+
+        % if alphaindex:
+        <link rel="stylesheet" href="css/alphabetSearch.css">
+        % endif
+</%def>
+
+<%def name="javascriptIncludes()">
+        <script src="js/libs/jquery.dataTables.1.10.25.min.js"></script>
+        <script src="js/libs/full_numbers_no_ellipses.js"></script>
+
+	<script>
+        % if alphaindex:
+        function alphaLoadCallback(d) {
+            if ($('span.active').length > 0) {
+                d.selected = $('span.active').attr('value')
+            }
+            else {
+                d.selected = 'All'
+            }
+
+            // Update the counts on the header
+            buildAlphaIndex(run_async = true);
+        };
+
+        function showAlphaCount(){
+            var alphabetInfo = $('#alphabetInfo');
+            alphabetInfo.css({'opacity': 1, 'left' : $(this).position().left, 'width' : $(this).width()});
+            alphabetInfo.text($(this).attr("count"));
+        };
+
+        function hideAlphaCount() {
+            $('#alphabetInfo').css('opacity', 0);
+        };
+
+        function setActive(x) {
+            $('#alphabetSearch').find( '.active' ).removeClass( 'active' );
+            $('#alphabetSearch > span[value="' + x + '"').addClass( 'active' );
+        }
+
+        function buildAlphaIndex(run_async = false) {
+            $.ajax({
+                type: 'GET',
+                url: 'alpha_volume_counts',
+                async : run_async,
+                data: {as_json: true},
+                dataType: 'json',
+                success : function(data) {
+                    var container = $('#alphabetSearch')
+                    var prev_active = 'All';
+
+                    if ($('span.active').length > 0) {
+                         prev_active = $('span.active').attr('value')
+                    }
+
+                    if (container.children('span').length > 0
+                        && typeof data !== 'undefined') {
+                        for (const [letter, value] of Object.entries(data)) {
+                            let span = $('#alphabetSearch > span[value="' + letter + '"')
+                            
+                            span
+                                .removeClass('empty')
+                                .attr( 'count', value)
+                                .addClass(value > 0 ? '' : 'empty');
+                        }
+                    } else {
+                        if (typeof data !== 'undefined') {
+                            container.empty()
+                            container.append('Search: ');
+
+                            for (const [letter, value] of Object.entries(data)) {
+                            $('<span>')
+                                .attr( 'count', value)
+                                .attr( 'value', letter)
+                                .html(letter.length > 1 ? letter : letter.toUpperCase())
+                                .addClass(value > 0 ? '' : 'empty')
+                                .appendTo(container);
+                            }
+
+                            $('<div class="alphabetInfo" id="alphabetInfo"></div>')
+                                .appendTo( container );
+
+                            attachAlphaEvents();
+                        }
+                    }
+
+                    setActive(prev_active);
+                }
+            });            
+        }
+
+        function attachAlphaEvents() {
+            $('#alphabetSearch')
+                .on( 'click', 'span', function () {
+                    var newLetter = $( this ).attr('value')
+                    setActive(newLetter)
+                    $('#series_table').DataTable().ajax.reload(null, true);
+                } );
+            $('#alphabetSearch')
+                .on( 'mouseenter', 'span', showAlphaCount)
+                .on( 'mouseleave', 'span', hideAlphaCount);
+        }
+        % endif
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) {
+                return '';
+            }
+
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        $.fn.DataTable.ext.pager.numbers_length = 3;
+        function initThisPage() {
+            % if alphaindex:
+            buildAlphaIndex(run_async=false);
+            % endif
+
+            $('#series_table').dataTable( {
+                "preDrawCallback": function (settings){
+                    pageScrollPos = $('#series_table div.datatables_scrollBody').scrollTop();
+                },
+                "sDom": '<"dataTables_header clearfix"lf>r<"table_holder"t><"dataTables_footer clearfix"ip>',
+                "processing": true,
+                "serverSide": true,
+                "ajax": {
+                    "url" : 'loadhome',
+                    "type" : 'GET',                    
+                    % if alphaindex:
+                    "data": alphaLoadCallback,
+                    % endif
+                },
+                "destroy": true,
+                "fnInitComplete": function(oSettings, json)
+                {
+                },
+                "columnDefs": [
+                    {
+                       "sortable": true,
+                       "targets": [ 0 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                           if (full[0]){
+                               var pub = escapeHtml(full[0]);
+                               var pubShort = pub.length > 22 ? escapeHtml(full[0].slice(0,19)) + '...' : pub;
+                               return '<span class="cell-publisher" title="' + pub + '">' + pubShort + '</span>';
+                           } else {
+                               return '<span class="cell-publisher text-muted" title="Unavailable (due to CV)">Unavailable</span>';
+                           }
+                        }
+                    },
+                    {
+                       "sortable": true,
+                       "targets": [ 1 ],
+                       "visible": true,
+                       "data": "Series",
+                       "render":function (data,type,full) {
+                            var comicTitle = full[1] ? String(full[1]) : 'Unknown comic';
+                            var comicId = encodeURIComponent(full[10]);
+
+                            var vol = (full[12] && full[12] != 'v1') ? ' <span class="series-meta series-vol">' + escapeHtml(String(full[12])) + '</span>' : '';
+                            var bt = full[11] ? ' <span class="series-meta series-format">[' + escapeHtml(String(full[11])) + ']</span>' : '';
+
+                            var titleAttr = escapeHtml(comicTitle);
+                            var linkText = escapeHtml(comicTitle.length > 60 ? comicTitle.slice(0,60)+"..." : comicTitle);
+
+                            return '<a class="series-title-link" title="'+ titleAttr +'" href="comicDetails?ComicID=' + comicId + '"><span class="series-name">' + linkText + '</span>' + vol + bt + '</a>';
+                       }
+                    },
+                    {
+                       "sortable": true,
+                       "targets": [ 3 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                            if (full[3]){
+                               var isVal = escapeHtml(full[3]);
+                               if (isVal.length > 9){
+                                 return '<span class="cell-issue" title="#'+isVal+'">#'+isVal.slice(0,7)+'...</span>';
+                               } else {
+                                 return '<span class="cell-issue">#' + isVal + '</span>';
+                               }
+                            } else {
+                               return '<span class="text-muted">N/A</span>';
+                            }
+                       }
+                    },
+                    {
+                       "sortable": true,
+                       "targets": [ 4 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                           if (full[4]){
+                               if (full[4].includes('Unknown')){
+                                   return '<span class="text-muted">N/A</span>';
+                               } else {
+                                   return '<span class="cell-date">' + escapeHtml(full[4]) + '</span>';
+                               }
+                           } else {
+                               return '<span class="text-muted">N/A</span>';
+                           }
+                       }
+                    },
+                    {
+                       "sortable": true,
+                       "targets": [ 5 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                                var cpercent = parseFloat(full[7]) || 0;
+                                var pctClamped = Math.min(Math.max(cpercent, 0), 100);
+                                var stateClass = 'missing';
+                                if (cpercent >= 101){
+                                    stateClass = 'warning';
+                                } else if (cpercent >= 100) {
+                                    stateClass = 'complete';
+                                }
+                                var haveVal = escapeHtml(full[8] !== undefined ? full[8] : '0');
+                                var totalVal = escapeHtml(full[9] !== undefined ? full[9] : '0');
+                                return '<div class="progress-cell" title="' + cpercent + '% (' + haveVal + '/' + totalVal + ')">' +
+                                       '<div class="progress-container progress--' + stateClass + '">' +
+                                       '<div class="progress-bar-fill" style="width:' + pctClamped + '%;"></div>' +
+                                       '</div>' +
+                                       '<span class="progress-fraction">' + haveVal + '/' + totalVal + '</span>' +
+                                       '</div>';
+                        }
+                    },
+                   {
+                       "sortable": true,
+                       "targets": [ 6 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                           return full[5] ? '<span class="cell-status">' + escapeHtml(full[5]) + '</span>' : '';
+                       }
+                   },
+                   {
+                       "sortable": true,
+                       "targets": [ 7 ],
+                       "visible": true,
+                       "render":function (data,type,full) {
+                                var stats = full[6];
+                                var chipClass = 'chip--active';
+                                var label = 'Active';
+                                if (stats === 'Paused') {
+                                    chipClass = 'chip--paused';
+                                    label = 'Paused';
+                                } else if (stats === 'Loading') {
+                                    chipClass = 'chip--loading';
+                                    label = 'Loading';
+                                } else if (stats === 'Error' || stats === 'Failed') {
+                                    chipClass = 'chip--error';
+                                    label = 'Error';
+                                } else if (stats !== 'Active') {
+                                    chipClass = 'chip--skipped';
+                                    label = escapeHtml(stats || 'Unknown');
+                                }
+                                return '<span class="chip ' + chipClass + '"><span class="chip-dot"></span>' + label + '</span>';
+                        }
+                    },
+
+                ],
+                "order": [[7, 'asc'],[1, 'asc']],
+                "paginationType": "simple_numbers",
+                "displayLength": 25,
+                "stateSave": true,
+                "stateDuration" : 0,
+                "lengthMenu": [[10, 15, 25, 50, 100, 200, -1], [10, 15, 25, 50, 100, 200, 'All' ]],
+                "language": {
+                     "search":"Filter:",
+                     "lengthMenu":"Show _MENU_ items per page",
+                     "emptyTable": "No information available",
+                     "info":"Showing _START_ to _END_ of _TOTAL_ items",
+                     "infoEmpty":"Showing 0 to 0 of 0 lines",
+                     "infoFiltered":"(filtered from _MAX_ total items)"
+                },
+                "rowCallback": function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
+                    if (aData[13] === 1){
+                        $('td', nRow).closest('tr').addClass("gradeU");
+                    } else {
+                        if (aData[6] === "Paused") {
+                            $('td', nRow).closest('tr').addClass("gradeT");
+                        } else if (aData[6] === "Loading") {
+                            $('td', nRow).closest('tr').addClass("gradeL");
+                        } else if (aData[6] === "Error" || aData[6] == "Failed") {
+                            $('td', nRow).closest('tr').addClass("gradeX");
+                        } else {
+                            $('td', nRow).closest('tr').addClass("gradeZ");
+                        }
+                    }
+                    nRow.children[0].id = 'publisher';
+                    nRow.children[1].id = 'name';
+                    nRow.children[2].id = 'year';
+                    nRow.children[3].id = 'issue';
+                    nRow.children[4].id = 'published';
+                    nRow.children[5].id = 'have';
+                    nRow.children[6].id = 'status';
+                    nRow.children[7].id = 'active';
+                    return nRow;
+                },
+                "drawCallback": function (settings) {
+                    // Jump to top of page
+                    $('#series_table div.dataTables_scrollBody').scrollTop(pageScrollPos);
+                    var api = this.api();
+                    var rows = api.rows({ page: 'current' }).data();
+                    renderLibraryShelf(rows);
+                    syncSortControls();
+                },                
+                % if alphaindex:
+                "stateSaveParams": function(settings, data) {
+                    if ($('span.active').length != 0) {
+                        data.selected = $('span.active').attr('value')
+                    } else {
+                        data.selected = 'All'
+                    }
+                },
+                "stateLoadParams": function(settings, data) {
+                    setActive(data.selected);
+                },
+                % endif
+            });
+
+            // Handlers for alphaindex controls
+            % if alphaindex:
+            attachAlphaEvents();
+            % endif
+
+        };
+
+        function syncSortControls() {
+            var dt = $('#series_table').DataTable();
+            if (!dt) return;
+            var order = dt.order();
+            if (order && order.length > 0) {
+                var col = order[0][0];
+                var dir = order[0][1] || 'asc';
+                $('#shelfSortField').val(String(col));
+                $('#shelfSortDir').attr('data-dir', dir);
+                if (dir.toLowerCase() === 'desc') {
+                    $('#shelfSortDir').find('.sort-icon-asc').hide();
+                    $('#shelfSortDir').find('.sort-icon-desc').show();
+                    $('#shelfSortDir').attr('title', 'Sort Descending');
+                    $('#shelfSortDirLabel').text('DESC');
+                } else {
+                    $('#shelfSortDir').find('.sort-icon-desc').hide();
+                    $('#shelfSortDir').find('.sort-icon-asc').show();
+                    $('#shelfSortDir').attr('title', 'Sort Ascending');
+                    $('#shelfSortDirLabel').text('ASC');
+                }
+            }
+        }
+
+        function validateCoverUrl(raw) {
+            if (!raw || typeof raw !== 'string') return null;
+            var trimmed = raw.trim();
+            // Strict allowlist: allow only cache/<single-safe-filename>.<jpg|jpeg|png|webp>
+            // Reject nested paths, query strings, fragments, encoded traversal, protocol-relative URLs, and all other schemes
+            if (/[\?\#\%\\\:\s\0]/.test(trimmed)) return null;
+            if (!trimmed.startsWith('cache/')) return null;
+            var filename = trimmed.slice(6);
+            if (filename.indexOf('/') !== -1 || filename.indexOf('\\') !== -1 || filename.indexOf('..') !== -1 || filename.startsWith('.')) return null;
+            if (!/^[a-zA-Z0-9_\-]+(?:\.[a-zA-Z0-9_\-]+)*\.(?:jpg|jpeg|png|webp)$/i.test(filename)) return null;
+            return encodeURI(trimmed);
+        }
+
+        var MAX_SHELF_CARDS = 100;
+
+        function renderLibraryShelf(rows) {
+            var grid = $('#library_shelf_grid');
+            var guardrail = $('#library_shelf_guardrail');
+            grid.empty();
+            guardrail.empty().hide();
+
+            if (!rows) {
+                grid.html('<div class="shelf-empty-state"><p>No series to display.</p></div>');
+                return;
+            }
+
+            var rawRows = (typeof rows.toArray === 'function') ? rows.toArray() : (Array.isArray(rows) ? rows : Array.from(rows || []));
+            if (rawRows.length === 0) {
+                grid.html('<div class="shelf-empty-state"><p>No series to display.</p></div>');
+                return;
+            }
+
+            var totalCount = rawRows.length;
+            var isCapped = totalCount > MAX_SHELF_CARDS;
+            var rowsToRender = isCapped ? rawRows.slice(0, MAX_SHELF_CARDS) : rawRows;
+
+            if (isCapped) {
+                guardrail.html(
+                    '<div class="shelf-guardrail-notice" role="status" aria-live="polite">' +
+                        '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                            '<circle cx="12" cy="12" r="10"></circle>' +
+                            '<line x1="12" y1="8" x2="12" y2="12"></line>' +
+                            '<line x1="12" y1="16" x2="12.01" y2="16"></line>' +
+                        '</svg>' +
+                        '<span>Shelf view shows the first 100 results. Filter or paginate to browse more.</span>' +
+                    '</div>'
+                );
+                if ($('#series_table_wrapper').hasClass('view-mode--shelf')) {
+                    guardrail.show();
+                }
+            }
+
+            var html = '';
+            for (var i = 0; i < rowsToRender.length; i++) {
+                var row = rowsToRender[i];
+                var pub = row[0] ? escapeHtml(row[0]) : 'Unknown Publisher';
+                var title = row[1] ? String(row[1]) : 'Unknown Comic';
+                var year = row[2] ? escapeHtml(String(row[2])) : '';
+                var status = row[6] || 'Active';
+                var pct = parseFloat(row[7]) || 0;
+                var have = row[8] !== undefined ? escapeHtml(String(row[8])) : '0';
+                var total = row[9] !== undefined ? escapeHtml(String(row[9])) : '0';
+                var comicId = encodeURIComponent(row[10]);
+                var displayType = row[11];
+                var volume = row[12];
+                var cvRemoved = row[13];
+                var rawCover = row[14];
+
+                var validCover = validateCoverUrl(rawCover);
+                var pctClamped = Math.min(Math.max(pct, 0), 100);
+                var pctDisplay = (pct === Math.floor(pct)) ? pct.toFixed(0) : pct.toFixed(1);
+
+                var progClass = 'missing';
+                if (pct >= 101) {
+                    progClass = 'warning';
+                } else if (pct >= 100) {
+                    progClass = 'complete';
+                }
+
+                var chipClass = 'chip--active';
+                var chipLabel = 'Active';
+                if (status === 'Paused') {
+                    chipClass = 'chip--paused';
+                    chipLabel = 'Paused';
+                } else if (status === 'Loading') {
+                    chipClass = 'chip--loading';
+                    chipLabel = 'Loading';
+                } else if (status === 'Error' || status === 'Failed') {
+                    chipClass = 'chip--error';
+                    chipLabel = 'Error';
+                } else if (status !== 'Active') {
+                    chipClass = 'chip--skipped';
+                    chipLabel = escapeHtml(status);
+                }
+
+                var volBadge = (volume && volume !== 'v1') ? '<span class="shelf-card-badge vol">' + escapeHtml(String(volume)) + '</span>' : '';
+                var typeBadge = displayType ? '<span class="shelf-card-badge format">' + escapeHtml(String(displayType)) + '</span>' : '';
+
+                var coverMediaHtml = '';
+                if (validCover) {
+                    coverMediaHtml = '<img src="' + escapeHtml(validCover) + '" alt="' + escapeHtml(title) + '" loading="lazy" class="shelf-cover-img" onerror="this.style.display=\'none\'; $(this).next(\'.shelf-cover-fallback\').css(\'display\', \'flex\');" />' +
+                        '<div class="shelf-cover-fallback" style="display:none;">' +
+                            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>' +
+                            '<span>No Cover</span>' +
+                        '</div>';
+                } else {
+                    coverMediaHtml = '<div class="shelf-cover-fallback" style="display:flex;">' +
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>' +
+                        '<span>No Cover</span>' +
+                    '</div>';
+                }
+
+                html += '<div class="shelf-card">' +
+                    '<a href="comicDetails?ComicID=' + comicId + '" class="shelf-card-cover-link">' +
+                        '<div class="shelf-cover-frame">' +
+                            coverMediaHtml +
+                            '<div class="shelf-cover-badges">' +
+                                volBadge + typeBadge +
+                            '</div>' +
+                            '<div class="shelf-cover-status">' +
+                                '<span class="chip ' + chipClass + ' chip--sm"><span class="chip-dot"></span>' + chipLabel + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                    '</a>' +
+                    '<div class="shelf-card-body">' +
+                        '<a href="comicDetails?ComicID=' + comicId + '" class="shelf-card-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</a>' +
+                        '<div class="shelf-card-meta">' +
+                            '<span class="shelf-card-publisher" title="' + pub + '">' + pub + '</span>' +
+                            (year ? '<span class="shelf-card-dot">•</span><span class="shelf-card-year">' + year + '</span>' : '') +
+                        '</div>' +
+                        '<div class="shelf-card-progress" title="' + pctDisplay + '% (' + have + '/' + total + ')">' +
+                            '<div class="progress-container progress--' + progClass + '">' +
+                                '<div class="progress-bar-fill" style="width:' + pctClamped + '%;"></div>' +
+                            '</div>' +
+                            '<span class="shelf-progress-count">' + have + ' / ' + total + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            }
+
+            grid.html(html);
+        }
+
+        function setViewMode(mode, savePref) {
+            if (savePref !== false) {
+                localStorage.setItem('mylar_library_view_mode', mode);
+            }
+            if (mode === 'shelf') {
+                $('#viewBtnShelf').addClass('active');
+                $('#viewBtnList').removeClass('active');
+                $('#series_table_wrapper').addClass('view-mode--shelf').removeClass('view-mode--list');
+                $('#shelfSortControl').show();
+                if ($('#library_shelf_guardrail').children().length > 0) {
+                    $('#library_shelf_guardrail').show();
+                }
+            } else {
+                $('#viewBtnList').addClass('active');
+                $('#viewBtnShelf').removeClass('active');
+                $('#series_table_wrapper').addClass('view-mode--list').removeClass('view-mode--shelf');
+                $('#shelfSortControl').hide();
+                $('#library_shelf_guardrail').hide();
+
+                // Force DataTables column width recalculation after returning to List view
+                setTimeout(function() {
+                    var dt = $('#series_table').DataTable();
+                    if (dt) {
+                        dt.columns.adjust();
+                    }
+                }, 20);
+            }
+            syncSortControls();
+        }
+
+        $(document).ready(function(){
+            initThisPage();
+            initActions();
+
+            var urlParams = new URLSearchParams(window.location.search);
+            var queryView = urlParams.get('view');
+            var savedMode = queryView || localStorage.getItem('mylar_library_view_mode') || 'list';
+            setViewMode(savedMode, false);
+
+            var sortCol = urlParams.get('sort_col');
+            var sortDir = urlParams.get('sort_dir');
+            if (sortCol !== null) {
+                var dt = $('#series_table').DataTable();
+                if (dt) {
+                    dt.order([parseInt(sortCol, 10), sortDir || 'asc']).draw();
+                }
+            }
+
+            $('#viewBtnList').on('click', function() { setViewMode('list', true); });
+            $('#viewBtnShelf').on('click', function() { setViewMode('shelf', true); });
+
+            $('#shelfSortField').on('change', function() {
+                var col = parseInt($(this).val(), 10);
+                var dir = $('#shelfSortDir').attr('data-dir') || 'asc';
+                var dt = $('#series_table').DataTable();
+                if (dt) {
+                    dt.order([col, dir]).draw();
+                }
+            });
+
+            $('#shelfSortDir').on('click', function() {
+                var currentDir = $(this).attr('data-dir') || 'asc';
+                var newDir = currentDir === 'asc' ? 'desc' : 'asc';
+                var col = parseInt($('#shelfSortField').val(), 10);
+                var dt = $('#series_table').DataTable();
+                if (dt) {
+                    dt.order([col, newDir]).draw();
+                }
+            });
+
+            $(window).on('resize', function() {
+                if (!$('#series_table_wrapper').hasClass('view-mode--shelf')) {
+                    var dt = $('#series_table').DataTable();
+                    if (dt) {
+                        dt.columns.adjust();
+                    }
+                }
+            });
+        });
+	</script>
+	
+</%def>
