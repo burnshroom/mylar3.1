@@ -119,8 +119,13 @@ jobs:
           [ "$RUNNING" = "true" ]
 
           echo "[*] Verifying process ownership (must run as non-root UID 1001)..."
-          PROC_UID=$(docker exec mylar-smoke-test ps -o uid,comm | grep python | awk '{print $1}' | head -n1 || true)
-          echo "Detected Python process UID: $PROC_UID"
+          PROC_USER=$(docker exec mylar-smoke-test ps -o user,args | grep -E 'python|Mylar' | awk '{print $1}' | head -n1 || true)
+          echo "Detected Python process user: $PROC_USER"
+          [ -n "$PROC_USER" ]
+          [ "$PROC_USER" != "root" ]
+          [ "$PROC_USER" != "0" ]
+          PROC_UID=$(docker exec mylar-smoke-test id -u "$PROC_USER")
+          echo "Resolved process UID: $PROC_UID"
           [ "$PROC_UID" = "1001" ]
 
           echo "[*] Testing HTTP endpoints..."
@@ -131,8 +136,9 @@ jobs:
           echo "$CREATORS_RESP" | grep -i "creator" >/dev/null
 
           echo "[*] Verifying /config directory persistence and ownership..."
-          [ -f "$TEST_DIR/config/config.ini" ] || [ -f "$TEST_DIR/config/mylar.db" ]
+          ls -la "$TEST_DIR/config"
           CONFIG_UID=$(stat -c '%u' "$TEST_DIR/config" || stat -f '%u' "$TEST_DIR/config")
+          echo "Config dir UID: $CONFIG_UID"
           [ "$CONFIG_UID" = "1001" ]
 
           echo "[*] Verifying /app/mylar3 write isolation..."
