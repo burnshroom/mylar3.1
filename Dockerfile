@@ -1,3 +1,20 @@
+# Stage 1: Build dependencies & wheels
+FROM python:3.11-alpine3.20 AS builder
+
+RUN apk add --no-cache \
+    build-base \
+    libffi-dev \
+    zlib-dev \
+    jpeg-dev \
+    git
+
+WORKDIR /build
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -U pip setuptools wheel && \
+    pip wheel --no-cache-dir --wheel-dir=/build/wheels -r requirements.txt
+
+# Stage 2: Final minimal runtime image
 FROM python:3.11-alpine3.20
 
 ARG BUILD_DATE
@@ -16,22 +33,23 @@ LABEL org.opencontainers.image.title="Mylar3 Modern Creator Edition" \
 RUN apk add --no-cache \
     bash \
     curl \
-    git \
-    build-base \
-    libffi-dev \
-    zlib-dev \
-    jpeg-dev \
     tzdata \
     shadow \
-    su-exec
+    su-exec \
+    libffi \
+    zlib \
+    libjpeg-turbo
 
 WORKDIR /app/mylar3
 
+COPY --from=builder /build/wheels /wheels
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -U pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -U pip && \
+    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt && \
+    rm -rf /wheels
 
 COPY . .
+RUN chmod +x /app/mylar3/docker/entrypoint.sh
 
 ENV PUID=1000 \
     PGID=1000 \
@@ -41,4 +59,5 @@ ENV PUID=1000 \
 VOLUME /config /comics /downloads
 EXPOSE 8090
 
-ENTRYPOINT ["python3", "/app/mylar3/Mylar.py", "--nolaunch", "--quiet", "--datadir", "/config"]
+ENTRYPOINT ["/app/mylar3/docker/entrypoint.sh"]
+CMD ["python3", "/app/mylar3/Mylar.py", "--nolaunch", "--quiet", "--datadir", "/config"]
