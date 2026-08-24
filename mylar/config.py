@@ -163,6 +163,13 @@ _CONFIG_DEFINITIONS = OrderedDict({
     'CV_USER_AGENT': (str, 'CV', 'comictagger image fetcher'),
     'IMPRINT_MAPPING_TYPE': (str, 'CV', 'CV'),  # either 'CV' for ComicVine or 'JSON' for imprints.json to choose which naming to use for imprints
 
+    'METRON_ENABLED': (bool, 'Metron', False),
+    'METRON_AUTH_MODE': (str, 'Metron', 'token'),
+    'METRON_API_TOKEN': (str, 'Metron', None),
+    'METRON_USERNAME': (str, 'Metron', None),
+    'METRON_PASSWORD': (str, 'Metron', None),
+    'METRON_BASE_URL': (str, 'Metron', 'https://metron.cloud/api/'),
+
     'LOG_DIR' : (str, 'Logs', None),
     'MAX_LOGSIZE' : (int, 'Logs', 10000000),
     'MAX_LOGFILES': (int, 'Logs', 5),
@@ -1159,6 +1166,8 @@ class Config(object):
                             'OPDS_PASSWORD':         ('OPDS', 'opds_password', self.OPDS_PASSWORD),
                             'PP_SSHPASSWD':          ('AutoSnatch', 'pp_sshpasswd', self.PP_SSHPASSWD),
                             'EMAIL_PASSWORD':        ('Email','email_password', self.EMAIL_PASSWORD),
+                            'METRON_API_TOKEN':      ('Metron', 'metron_api_token', self.METRON_API_TOKEN),
+                            'METRON_PASSWORD':       ('Metron', 'metron_password', self.METRON_PASSWORD),
                             })
 
         new_encrypted = 0

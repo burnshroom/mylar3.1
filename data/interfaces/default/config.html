@@ -298,6 +298,58 @@
                                     </div>
                                 </div>
                          </fieldset>
+                         <fieldset>
+                                 <legend>Metron (Supplemental Metadata)</legend>
+                                 <div class="row checkbox">
+                                     <input id="metron_enabled" type="checkbox" name="metron_enabled" value="1" ${config['metron_enabled']} /><label>Enable Metron Integration</label>
+                                     <small>Optional supplemental metadata provider for comic and creator credit comparison</small>
+                                 </div>
+                                 <div id="metron_options" style="${'display:none;' if not config['metron_enabled'] else ''}">
+                                     <div class="row">
+                                         <label>API Endpoint</label>
+                                         <input type="text" value="https://metron.cloud/api/" readonly="readonly" disabled="disabled" size="35" style="opacity: 0.8; cursor: not-allowed;">
+                                         <small>Official Metron API endpoint (read-only)</small>
+                                     </div>
+                                     <div class="row">
+                                         <label>Authentication Method</label>
+                                         <select name="metron_auth_mode" id="metron_auth_mode">
+                                             <option value="token" ${'selected="selected"' if config.get('metron_auth_mode') == 'token' else ''}>API Token</option>
+                                             <option value="basic" ${'selected="selected"' if config.get('metron_auth_mode') == 'basic' else ''}>Username &amp; Password (Basic)</option>
+                                         </select>
+                                     </div>
+                                     <div id="metron_token_group" class="row" style="${'display:none;' if config.get('metron_auth_mode') == 'basic' else ''}">
+                                         <label>API Token</label>
+                                         <input type="password" name="metron_api_token" id="metron_api_token" value="" placeholder="${'••••••••' if config.get('metron_has_token') else 'Enter Metron API Token'}" size="40" autocomplete="new-password">
+                                         %if config.get('metron_has_token'):
+                                             <span class="metron-saved-badge" style="color: #28a745; margin-left: 8px; font-size: 0.85em; font-weight: bold;">&#10003; Credential saved</span>
+                                             <div style="margin-top: 4px;">
+                                                 <label style="font-weight: normal; font-size: 0.85em;"><input type="checkbox" name="clear_metron_token" id="clear_metron_token" value="1"> Clear saved token</label>
+                                             </div>
+                                         %endif
+                                         <small>Personal API Token from your Metron user account profile</small>
+                                     </div>
+                                     <div id="metron_basic_group" style="${'display:none;' if config.get('metron_auth_mode') != 'basic' else ''}">
+                                         <div class="row">
+                                             <label>Metron Username</label>
+                                             <input type="text" name="metron_username" id="metron_username" value="${config.get('metron_username') or ''}" size="30" autocomplete="off">
+                                         </div>
+                                         <div class="row">
+                                             <label>Metron Password</label>
+                                             <input type="password" name="metron_password" id="metron_password" value="" placeholder="${'••••••••' if config.get('metron_has_password') else 'Enter Metron Password'}" size="30" autocomplete="new-password">
+                                             %if config.get('metron_has_password'):
+                                                 <span class="metron-saved-badge" style="color: #28a745; margin-left: 8px; font-size: 0.85em; font-weight: bold;">&#10003; Credential saved</span>
+                                                 <div style="margin-top: 4px;">
+                                                     <label style="font-weight: normal; font-size: 0.85em;"><input type="checkbox" name="clear_metron_password" id="clear_metron_password" value="1"> Clear saved password</label>
+                                                 </div>
+                                             %endif
+                                         </div>
+                                     </div>
+                                     <div class="row" style="margin-top: 10px;">
+                                         <input type="button" value="Test Connection" id="test_metron" class="btn">
+                                         <span id="metron_test_result" style="margin-left: 10px; font-size: 0.9em; font-weight: bold;"></span>
+                                     </div>
+                                 </div>
+                          </fieldset>
                         <fieldset>
                                 <legend>OPDS</legend><span id="opds_url" style="position:relative;top:-35px;right:20px;float:right;display:hidden;margin-bottom:-25px;"></span>
                                 <div class="row">
@@ -3363,6 +3415,71 @@ $("#enable_airdcpp").click(function(){
                             }
                     });
                     $('#ajaxMsg').addClass('success').fadeIn().delay(3000).fadeOut();
+                });
+
+                // Metron Settings interactions
+                $('#metron_enabled').change(function() {
+                    if ($(this).is(':checked')) {
+                        $('#metron_options').slideDown();
+                    } else {
+                        $('#metron_options').slideUp();
+                    }
+                });
+
+                $('#metron_auth_mode').change(function() {
+                    var mode = $(this).val();
+                    if (mode === 'basic') {
+                        $('#metron_token_group').hide();
+                        $('#metron_basic_group').show();
+                    } else {
+                        $('#metron_basic_group').hide();
+                        $('#metron_token_group').show();
+                    }
+                });
+
+                $('#test_metron').click(function(e) {
+                    e.preventDefault();
+                    var $btn = $(this);
+                    var $res = $('#metron_test_result');
+                    var auth_mode = $('#metron_auth_mode').val();
+                    var api_token = $('#metron_api_token').val();
+                    var username = $('#metron_username').val();
+                    var password = $('#metron_password').val();
+
+                    $btn.prop('disabled', true);
+                    $res.css('color', '#666').text('Testing connection to Metron API...');
+
+                    $.ajax({
+                        type: 'POST',
+                        url: 'testMetron',
+                        data: {
+                            auth_mode: auth_mode,
+                            api_token: api_token,
+                            username: username,
+                            password: password
+                        },
+                        dataType: 'json',
+                        success: function(data) {
+                            $btn.prop('disabled', false);
+                            if (data && data.success) {
+                                $res.css('color', '#28a745').text('✓ ' + data.message);
+                            } else {
+                                var msg = (data && data.message) ? data.message : 'Connection test failed.';
+                                $res.css('color', '#dc3545').text('✗ ' + msg);
+                            }
+                        },
+                        error: function(xhr) {
+                            $btn.prop('disabled', false);
+                            var msg = 'Connection test failed.';
+                            try {
+                                var errData = JSON.parse(xhr.responseText);
+                                if (errData && errData.message) {
+                                    msg = errData.message;
+                                }
+                            } catch(e) {}
+                            $res.css('color', '#dc3545').text('✗ ' + msg);
+                        }
+                    });
                 });
 
                 function checkCheckFolder(check_folder) {

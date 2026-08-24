@@ -1036,7 +1036,39 @@ def LoadAlternateSearchNames(seriesname_alt, comicid):
         Alternate_Names['Count'] = alt_count
         logger.info('AlternateNames returned:' + str(Alternate_Names))
 
-        return Alternate_Names
+def validate_cache_cover_path(cover_path):
+    """
+    Strict allowlist for series cover paths:
+    Allows ONLY 'cache/<single-safe-filename>.<jpg|jpeg|png|webp>'
+    Rejects nested paths, query strings, fragments, encoded traversal, protocol-relative URLs, and all other schemes.
+    Returns the validated string or None (never attempts to repair unsafe inputs).
+    """
+    if not cover_path or not isinstance(cover_path, str):
+        return None
+
+    # Reject whitespace, null bytes, URL params, fragments, encoded chars, backslashes, colons
+    if any(c in cover_path for c in ('?', '#', '%', '\\', ':', '\0', ' ', '\t', '\r', '\n')):
+        return None
+
+    # Must start strictly with 'cache/'
+    if not cover_path.startswith('cache/'):
+        return None
+
+    filename = cover_path[6:]
+    # Must not contain further path separators (no subdirectories)
+    if '/' in filename or '\\' in filename:
+        return None
+
+    # Reject traversal, leading dot, or hidden files
+    if '..' in filename or filename.startswith('.'):
+        return None
+
+    # Must strictly match allowed filename characters and allowed image extensions
+    if not re.match(r'^[a-zA-Z0-9_\-]+(?:\.[a-zA-Z0-9_\-]+)*\.(?:jpg|jpeg|png|webp)$', filename, re.IGNORECASE):
+        return None
+
+    return cover_path
+
 
 def havetotals(refreshit=None, start_char_filter=None):
         #import db
@@ -1219,7 +1251,13 @@ def filesafe(comic):
         comicname_filesafe = re.sub(r'[\:\'\"\,\?\!\\]', '', u_comic.decode('utf-8'))
         comicname_filesafe = re.sub(r'[\/\*]', '-', comicname_filesafe)
 
-    return comicname_filesafe
+def resolve_issue_file(comic_location, issue_location):
+    """
+    Safely resolves a comic archive file from database location fields.
+    Delegates to mylar.extensions.thumbnails.resolver.resolve_issue_file.
+    """
+    from mylar.extensions.thumbnails.resolver import resolve_issue_file as _resolve_issue_file
+    return _resolve_issue_file(comic_location, issue_location)
 
 def IssueDetails(filelocation, IssueID=None, justinfo=False, comicname=None):
     import zipfile

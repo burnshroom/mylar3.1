@@ -246,3 +246,11 @@ def load_image(filename, resize=600):
         RawImage = imdata + "==="
 
     return ComicImage
+
+def get_or_create_issue_thumbnail(comicid, issueid, file_path, target_width=300):
+    """
+    Generates and caches a bounded ~300px WebP thumbnail for an issue from its local archive.
+    Delegates to mylar.extensions.thumbnails.service.get_or_create_issue_thumbnail.
+    """
+    from mylar.extensions.thumbnails.service import get_or_create_issue_thumbnail as _get_thumb
+    return _get_thumb(comicid, issueid, file_path, target_width=target_width)

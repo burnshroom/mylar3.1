@@ -23,6 +23,7 @@ import requests
 import datetime
 from datetime import timedelta, date
 from collections import OrderedDict
+import hashlib
 import re
 import json
 import copy
@@ -59,6 +60,7 @@ from mylar import (
     db,
     Failed,
     filechecker,
+    getimage,
     helpers,
     importer,
     librarysync,
@@ -84,13 +86,16 @@ from mylar.auth import (
 
 def serve_template(templatename, **kwargs):
     interface_dir = os.path.join(str(mylar.PROG_DIR), 'data/interfaces/')
-    if any([mylar.CONFIG.INTERFACE == 'default', mylar.CONFIG.INTERFACE is None]):
-        tmper_dir = 'default'
+    active_theme = mylar.CONFIG.INTERFACE if (mylar.CONFIG and mylar.CONFIG.INTERFACE) else 'default'
+    if active_theme == 'default':
+        lookup_dirs = [os.path.join(interface_dir, 'default')]
     else:
-        tmper_dir = mylar.CONFIG.INTERFACE
+        theme_dir = os.path.join(interface_dir, active_theme)
+        default_dir = os.path.join(interface_dir, 'default')
+        lookup_dirs = [theme_dir, default_dir]
 
     icons = []
-    if mylar.CONFIG.INTERFACE == 'default':
+    if active_theme == 'default':
         icons = {'icon_gear': os.path.join(mylar.CONFIG.HTTP_ROOT, 'images', 'icon_gear.png'),
                  'icon_upcoming': os.path.join(mylar.CONFIG.HTTP_ROOT, 'images', 'icon_upcoming.png'),
                  'icon_wanted': os.path.join(mylar.CONFIG.HTTP_ROOT, 'images', 'icon_wanted.png'),
@@ -123,20 +128,16 @@ def serve_template(templatename, **kwargs):
                  'next': os.path.join(mylar.CONFIG.HTTP_ROOT, 'interfaces', 'carbon', 'images', 'next.gif'),
                  'prev': os.path.join(mylar.CONFIG.HTTP_ROOT, 'interfaces', 'carbon', 'images', 'prev.gif')}
 
-    template_dir = os.path.join(str(interface_dir), tmper_dir)
-    _hplookup = TemplateLookup(directories=[template_dir])
+    _hplookup = TemplateLookup(directories=lookup_dirs)
     try:
         template = _hplookup.get_template(templatename)
         return template.render(http_root=mylar.CONFIG.HTTP_ROOT, interface=mylar.CONFIG.INTERFACE, icons=icons, gl_messages=mylar.GLOBAL_MESSAGES, sse_key=mylar.SSE_KEY, pre_update=mylar.UPDATE_VALUE, **kwargs)
+    except exceptions.TopLevelLookupException as e:
+        logger.error(f"[TEMPLATE] Template not found in lookup chain {lookup_dirs}: {templatename} ({e})")
+        return exceptions.html_error_template().render()
     except Exception as e:
-        #default to base in case the html hasn't been changed in new interface.
-        template_dir = os.path.join(str(interface_dir), 'default')
-        _hplookup = TemplateLookup(directories=[template_dir])
-        try:
-            template = _hplookup.get_template(templatename)
-            return template.render(http_root=mylar.CONFIG.HTTP_ROOT, interface=mylar.CONFIG.INTERFACE, icons=icons, gl_messages=mylar.GLOBAL_MESSAGES, sse_key=mylar.SSE_KEY, pre_update=mylar.UPDATE_VALUE, **kwargs)
-        except Exception:
-            return exceptions.html_error_template().render()
+        logger.error(f"[TEMPLATE] Error rendering template {templatename}: {e}")
+        return exceptions.html_error_template().render()
 
 
 class WebMaintenance(object):
@@ -440,7 +441,7 @@ class WebInterface(object):
             rows = filtered[iDisplayStart:(iDisplayStart + iDisplayLength)]
         else:
             rows = filtered
-        rows = [[row['ComicPublisher'], row['ComicName'], row['ComicYear'], row['LatestIssue'], row['LatestDate'], row['recentstatus'], row['Status'], row['percent'], row['haveissues'], row['totalissues'], row['ComicID'], row['displaytype'], row['ComicVolume'], row['cv_removed']] for row in rows]
+        rows = [[row['ComicPublisher'], row['ComicName'], row['ComicYear'], row['LatestIssue'], row['LatestDate'], row['recentstatus'], row['Status'], row['percent'], row['haveissues'], row['totalissues'], row['ComicID'], row['displaytype'], row['ComicVolume'], row['cv_removed'], helpers.validate_cache_cover_path(row.get('ComicImage'))] for row in rows]
         
         return json.dumps({
             'recordsFiltered': len(filtered),
@@ -780,7 +781,10 @@ class WebInterface(object):
                     "ImageTime":                      '?' + datetime.datetime.now().strftime('%y-%m-%d %H:%M:%S')
                }
 
-        return serve_template(templatename="comicdetails_update.html", title=comicname, comic=comic, comicConfig=comicConfig, series=series, default_dates=default_dates)
+        from mylar.extensions.providers.metron import get_metron_availability
+        metron_avail = get_metron_availability()
+
+        return serve_template(templatename="comicdetails_update.html", title=comicname, comic=comic, comicConfig=comicConfig, series=series, default_dates=default_dates, metron_availability=metron_avail)
     comicDetails.exposed = True
 
     def update_series_filters(self, comicid):
@@ -4809,174 +4813,70 @@ class WebInterface(object):
         logger.info('Status set to Skipped.')
     clear_arcstatus.exposed = True
 
+    # Staged CBL manifests registry
+    from mylar.extensions.storyarcs.cbl_service import STAGED_CBL_MANIFESTS
+
+    def _get_staged_cbl_path(self, filename):
+        from mylar.extensions.storyarcs.cbl_service import get_staged_cbl_path
+        return get_staged_cbl_path(filename)
+
+    def _parse_and_reconcile_cbl(self, raw_bytes, sanitized_name, myDB):
+        from mylar.extensions.storyarcs.cbl_service import parse_and_reconcile_cbl
+        return parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB)
+
+    @staticmethod
+    def _sanitize_cbl_filename(filename):
+        from mylar.extensions.storyarcs.cbl_service import sanitize_cbl_filename
+        return sanitize_cbl_filename(filename)
+
+    def cbl_upload(self, cbl_file=None, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_upload
+        return handle_cbl_upload(cbl_file=cbl_file, **kwargs)
+    cbl_upload.exposed = True
+
+    def cbl_preview(self, token=None, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_preview
+        return handle_cbl_preview(token=token, **kwargs)
+    cbl_preview.exposed = True
+
+    def cbl_confirm_import(self, token=None, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_confirm_import
+        return handle_cbl_confirm_import(token=token, **kwargs)
+    cbl_confirm_import.exposed = True
+
+    def cbl_delete_arc(self, storyarcid=None, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_delete_arc
+        return handle_cbl_delete_arc(storyarcid=storyarcid, **kwargs)
+    cbl_delete_arc.exposed = True
+
+    def cbl_catalog_status(self, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_catalog_status
+        return handle_cbl_catalog_status(**kwargs)
+    cbl_catalog_status.exposed = True
+
+    def cbl_catalog_refresh(self, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_catalog_refresh
+        return handle_cbl_catalog_refresh(**kwargs)
+    cbl_catalog_refresh.exposed = True
+
+    def cbl_catalog_search(self, q="", publisher="", category="", limit=200, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_catalog_search
+        return handle_cbl_catalog_search(q=q, publisher=publisher, category=category, limit=limit, **kwargs)
+    cbl_catalog_search.exposed = True
+
+    def cbl_catalog_preview(self, entry_id=None, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_catalog_preview
+        return handle_cbl_catalog_preview(entry_id=entry_id, **kwargs)
+    cbl_catalog_preview.exposed = True
+
     def storyarc_main(self, arcid=None, **kwargs):
-        myDB = db.DBConnection()
-        arclist = []
-        if arcid is None:
-            alist = myDB.select("SELECT * from storyarcs WHERE ComicName is not Null GROUP BY StoryArcID") #COLLATE NOCASE")
-        else:
-            alist = myDB.select("SELECT * from storyarcs WHERE ComicName is not Null AND StoryArcID=? GROUP BY StoryArcID", [arcid]) #COLLATE NOCASE")
-
-        for al in alist:
-            totalissues = myDB.select("SELECT COUNT(*) as count from storyarcs WHERE StoryARcID=? AND NOT Manual is 'deleted'", [al['StoryArcID']])
-
-            havecnt = myDB.select("SELECT COUNT(*) as count FROM storyarcs WHERE StoryArcID=? AND (Status='Downloaded' or Status='Archived')", [al['StoryArcID']])
-            havearc = havecnt[0][0]
-            totalarc = totalissues[0][0]
-            if not havearc:
-                 havearc = 0
-            try:
-                 percent = (havearc *100.0) /totalarc
-                 if percent > 100:
-                     percent = 101
-            except (ZeroDivisionError, TypeError):
-                 percent = 0
-                 totalarc = '?'
-
-
-            arclist.append({"StoryArcID":       al['StoryArcID'],
-                            "StoryArc":         al['StoryArc'],
-                            "TotalIssues":      al['TotalIssues'],
-                            "SeriesYear":       al['SeriesYear'],
-                            "StoryArcDir":      al['StoryArc'],
-                            "Status":           al['Status'],
-                            "percent":          percent,
-                            "Have":             havearc,
-                            "SpanYears":        helpers.spantheyears(al['StoryArcID']),
-                            "Total":            totalarc,
-                            "CV_ArcID":         al['CV_ArcID']})
-        if arcid is None:
-            return serve_template(templatename="storyarc.html", title="Story Arcs", arclist=arclist, delete_type=0)
-        else:
-            return arclist[0]
+        from mylar.extensions.storyarcs.controller import handle_storyarc_main
+        return handle_storyarc_main(arcid=arcid, serve_template_fn=serve_template, **kwargs)
     storyarc_main.exposed = True
 
     def detailStoryArc(self, StoryArcID, StoryArcName=None, CV_ArcID=None, **kwargs):
-        myDB = db.DBConnection()
-        if StoryArcID is None and CV_ArcID is not None:
-            arcinfo = myDB.select("SELECT * from storyarcs WHERE CV_ArcID=? and NOT Manual IS 'deleted' order by ReadingOrder ASC", [CV_ArcID])
-        else:
-            arcinfo = myDB.select("SELECT * from storyarcs WHERE StoryArcID=? and NOT Manual IS 'deleted' order by ReadingOrder ASC", [StoryArcID])
-        issref = []
-        try:
-            cvarcid = arcinfo[0]['CV_ArcID']
-            arcpub = arcinfo[0]['Publisher']
-            if StoryArcID is None:
-                StoryArcID = arcinfo[0]['StoryArcID']
-            #if StoryArcName is None:
-            StoryArcName = arcinfo[0]['StoryArc']
-            for la in arcinfo:
-                if all([la['Status'] == 'Downloaded', la['Location'] is None]):
-                    issref.append({'IssueID':         la['IssueID'],
-                                   'ComicID':         la['ComicID'],
-                                   'IssuePublisher':  la['IssuePublisher'],
-                                   'Publisher':       la['Publisher'],
-                                   'StoryArc':        la['StoryArc'],
-                                   'StoryArcID':      la['StoryArcID'],
-                                   'ComicName':       la['ComicName'],
-                                   'IssueNumber':     la['IssueNumber'],
-                                   'ReadingOrder':    la['ReadingOrder']})
-
-            spanyears = helpers.spantheyears(StoryArcID)
-            sdir = helpers.arcformat(StoryArcName, spanyears, arcpub)
-
-        except:
-            cvarcid = None
-            sdir = mylar.CONFIG.GRABBAG_DIR
-
-        if len(issref) > 0:
-            helpers.updatearc_locs(StoryArcID, issref)
-            arcinfo = myDB.select("SELECT * from storyarcs WHERE StoryArcID=? AND NOT Manual IS 'deleted' order by ReadingOrder ASC", [StoryArcID])
-
-        template = 'storyarc_detail.html'
-
-        if arcinfo:
-            arcdetail = self.storyarc_main(arcid=arcinfo[0]['CV_ArcID'])
-            storyarcbanner = None
-            filepath = None
-            if arcinfo[0]['ArcImage'] is not None:
-                sb = 'cache/storyarcs/%s' % arcinfo[0]['ArcImage']
-                arcimage = True
-            else:
-                sb = 'cache/storyarcs/%s-banner' % arcinfo[0]['CV_ArcID']
-                arcimage = False
-            storyarc_imagepath = os.path.join(mylar.CONFIG.CACHE_DIR, 'storyarcs')
-            if not os.path.exists(storyarc_imagepath):
-                try:
-                    os.mkdir(storyarc_imagepath)
-                except:
-                    logger.warn('Unable to create storyarc image directory @ %s' % storyarc_imagepath)
-
-            if os.path.exists(storyarc_imagepath):
-                if arcimage is True:
-                    storyarcbanner = sb + '?' + datetime.datetime.now().strftime('%y-%m-%d %H:%M:%S')
-                    filepath = os.path.join(storyarc_imagepath, arcinfo[0]['ArcImage'])
-                else:
-                    dir = os.listdir(storyarc_imagepath)
-                    for fname in dir:
-                        if str(arcinfo[0]['CV_ArcID']) in fname:
-                            storyarcbanner = sb
-                            filepath = os.path.join(storyarc_imagepath, fname)
-                            storyarcbanner += os.path.splitext(fname)[1] + '?' + datetime.datetime.now().strftime('%y-%m-%d %H:%M:%S')
-                            break
-           #            if any(['H' in fname, 'W' in fname]):
-           #                if 'H' in fname:
-           #                    bannerheight = int(fname[fname.find('H')+1:fname.find('.')])
-           #                elif 'W' in fname:
-           #                    bannerwidth = int(fname[fname.find('W')+1:fname.find('.')])
-
-           #                if any([bannerwidth != 263, 'W' in fname]):
-           #                    #accomodate poster size
-           #                    storyarcbanner += 'W' + str(bannerheight)
-           #                else:
-           #                    #for actual banner width (ie. 960x280)
-           #                    storyarcbanner += 'H' + str(bannerheight)
-            #logger.fdebug('storyarcbanner: %s' % (storyarcbanner,))
-            if filepath is not None:
-                fname = os.path.basename(filepath)
-                if any(['H' in fname, 'W' in fname]):
-                   if 'H' in fname:
-                       bannerwidth = 263
-                       bannerheight = int(fname[fname.find('H')+1:fname.find('.')])
-                       template = 'storyarc_detail.html'
-                   elif 'W' in fname:
-                       bannerheight = 400
-                       bannerwidth = int(fname[fname.find('W')+1:fname.find('.')])
-                       template = 'storyarc_detail.poster.html'
-
-                #if any([bannerwidth != 263, 'W' in fname]):
-                #    #accomodate poster size
-                #    storyarcbanner += 'W' + str(bannerheight)
-                #else:
-                #    #for actual banner width (ie. 960x280)
-                #    storyarcbanner += 'H' + str(bannerheight)
-                else:
-                    import get_image_size
-                    image = get_image_size.get_image_metadata(filepath)
-                    imageinfo = json.loads(get_image_size.Image.to_str_json(image))
-                    logger.fdebug('imageinfo: %s' % imageinfo)
-                    if imageinfo['width'] > imageinfo['height']:
-                        template = 'storyarc_detail.html'
-                        bannerheight = '280'
-                        bannerwidth = '960'
-                    else:
-                        template = 'storyarc_detail.poster.html'
-                        bannerwidth = '263'
-                        bannerheight = '400'
-            else:
-                bannerheight = '280'
-                bannerwidth = '960'
-        else:
-            arcdetail = {}
-            arcdetail['percent'] = 0
-            arcdetail['Have'] = 0
-            arcdetail['Total'] = 0
-            storyarcbanner = 'images/blank.gif'
-            bannerwidth = '960'
-            bannerheight= '280'
-            spanyears = None
-
-        return serve_template(templatename=template, title="Detailed Arc list", readlist=arcinfo, storyarcname=StoryArcName, storyarcid=StoryArcID, cvarcid=cvarcid, sdir=sdir, arcdetail=arcdetail, storyarcbanner=storyarcbanner, bannerheight=bannerheight, bannerwidth=bannerwidth, spanyears=spanyears)
+        from mylar.extensions.storyarcs.controller import handle_detail_storyarc
+        return handle_detail_storyarc(StoryArcID, StoryArcName=StoryArcName, CV_ArcID=CV_ArcID, serve_template_fn=serve_template, **kwargs)
     detailStoryArc.exposed = True
 
     def order_edit(self, **kwargs): #id, value):
@@ -7161,6 +7061,12 @@ class WebInterface(object):
                     "dltotals": freq_tot,
                     "alphaindex": mylar.CONFIG.ALPHAINDEX,
                     "backup_on_start": helpers.checked(mylar.CONFIG.BACKUP_ON_START),
+                    "metron_enabled": helpers.checked(getattr(mylar.CONFIG, 'METRON_ENABLED', False)),
+                    "metron_auth_mode": getattr(mylar.CONFIG, 'METRON_AUTH_MODE', 'token') or 'token',
+                    "metron_username": getattr(mylar.CONFIG, 'METRON_USERNAME', '') or '',
+                    "metron_has_token": bool(getattr(mylar.CONFIG, 'METRON_API_TOKEN', None)),
+                    "metron_has_password": bool(getattr(mylar.CONFIG, 'METRON_PASSWORD', None)),
+                    "metron_base_url": getattr(mylar.CONFIG, 'METRON_BASE_URL', 'https://metron.cloud/api/'),
                }
         return serve_template(templatename="config.html", title="Settings", config=config, comicinfo=comicinfo)
     config.exposed = True
@@ -7492,11 +7398,39 @@ class WebInterface(object):
                            'prowl_enabled', 'prowl_onsnatch', 'pushover_enabled', 'pushover_onsnatch', 'pushover_image', 'mattermost_enabled', 'mattermost_onsnatch', 'boxcar_enabled',
                            'boxcar_onsnatch', 'pushbullet_enabled', 'pushbullet_onsnatch', 'telegram_enabled', 'telegram_onsnatch', 'telegram_image', 'discord_enabled', 'discord_onsnatch', 'slack_enabled', 'slack_onsnatch',
                            'email_enabled', 'email_enc', 'email_ongrab', 'email_onpost', 'gotify_enabled', 'gotify_server_url', 'gotify_token', 'gotify_onsnatch', 'opds_enable', 'opds_authentication', 'opds_metainfo', 'opds_pagesize', 'enable_ddl',
-                           'enable_getcomics', 'enable_airdcpp', 'jd2_enable', 'enable_external_server', 'ddl_prefer_upscaled', 'deluge_pause'] #enable_public
+                           'enable_getcomics', 'enable_airdcpp', 'jd2_enable', 'enable_external_server', 'ddl_prefer_upscaled', 'deluge_pause', 'metron_enabled'] #enable_public
 
         for checked_config in checked_configs:
             if checked_config not in kwargs:
                 kwargs[checked_config] = False
+
+        # Handle Metron secret preservation and explicit clear controls
+        if 'clear_metron_token' in kwargs and kwargs['clear_metron_token'] in ('1', 'true', 'True', True, 1):
+            kwargs['metron_api_token'] = None
+        elif 'metron_api_token' in kwargs:
+            val = kwargs['metron_api_token']
+            if val is None or str(val).strip() == '':
+                # Preserve existing stored token if submitted blank without explicit clear
+                if getattr(mylar.CONFIG, 'METRON_API_TOKEN', None) is not None:
+                    kwargs['metron_api_token'] = mylar.CONFIG.METRON_API_TOKEN
+                else:
+                    kwargs['metron_api_token'] = None
+
+        if 'clear_metron_password' in kwargs and kwargs['clear_metron_password'] in ('1', 'true', 'True', True, 1):
+            kwargs['metron_password'] = None
+        elif 'metron_password' in kwargs:
+            val = kwargs['metron_password']
+            if val is None or str(val).strip() == '':
+                # Preserve existing stored password if submitted blank without explicit clear
+                if getattr(mylar.CONFIG, 'METRON_PASSWORD', None) is not None:
+                    kwargs['metron_password'] = mylar.CONFIG.METRON_PASSWORD
+                else:
+                    kwargs['metron_password'] = None
+
+        if 'clear_metron_token' in kwargs:
+            del kwargs['clear_metron_token']
+        if 'clear_metron_password' in kwargs:
+            del kwargs['clear_metron_password']
 
         for k, v in kwargs.items():
             try:
@@ -8198,6 +8132,62 @@ class WebInterface(object):
 
     IssueInfo.exposed = True
 
+    def IssueThumbnail(self, issueid, comicid=None):
+        from mylar.extensions.thumbnails.controller import handle_issue_thumbnail
+        return handle_issue_thumbnail(issueid, comicid)
+
+    IssueThumbnail.exposed = True
+
+    def indexCreators(self, comicid=None, issueids=None, csrf_token=None, **kwargs):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        from mylar.extensions.creators import CreatorController
+        controller = CreatorController()
+        return json.dumps(controller.start_series_index(comicid, issue_ids=issueids, csrf_token=csrf_token))
+
+    indexCreators.exposed = True
+
+    def indexCreatorsStatus(self, job_id=None, **kwargs):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        from mylar.extensions.creators import CreatorController
+        controller = CreatorController()
+        return json.dumps(controller.get_index_status(job_id=job_id))
+
+    indexCreatorsStatus.exposed = True
+
+    def indexCreatorsCancel(self, job_id=None, csrf_token=None, **kwargs):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        from mylar.extensions.creators import CreatorController
+        controller = CreatorController()
+        return json.dumps(controller.cancel_index(job_id=job_id, csrf_token=csrf_token))
+
+    indexCreatorsCancel.exposed = True
+
+    def seriesCreatorsSummary(self, comicid=None, **kwargs):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        from mylar.extensions.creators import CreatorController
+        controller = CreatorController()
+        return json.dumps(controller.get_series_summary(comicid))
+
+    seriesCreatorsSummary.exposed = True
+
+    def creators(self, search=None, role=None, sort='name_asc', page=1, page_size=24, **kwargs):
+        from mylar.extensions.creators.browser_controller import handle_creator_catalog
+        return handle_creator_catalog(search=search, role=role, sort=sort, page=page, page_size=page_size, serve_template_fn=serve_template, **kwargs)
+
+    creators.exposed = True
+
+    def creator_detail(self, NameRecordID=None, name_record_id=None, role=None, type=None, comicid=None, sort='date_desc', **kwargs):
+        from mylar.extensions.creators.browser_controller import handle_creator_detail
+        return handle_creator_detail(name_record_id=NameRecordID or name_record_id, role=role, type=type, comicid=comicid, sort=sort, serve_template_fn=serve_template, **kwargs)
+
+    creator_detail.exposed = True
+
+    def issueCreatorCredits(self, issueid=None, annual=0, **kwargs):
+        from mylar.extensions.creators.browser_controller import handle_issue_creator_credits
+        return handle_issue_creator_credits(issueid=issueid, annual=annual, **kwargs)
+
+    issueCreatorCredits.exposed = True
+
     def manual_metatag(self, issueid, comicid=None, group=False): #dirName, issueid, filename, comicid, comversion, seriesyear=None, group=False, agerating=None):
         module = '[MANUAL META-TAGGING]'
         try:
@@ -8667,6 +8657,90 @@ class WebInterface(object):
             logger.warn('Testing failed to %s [HOST:%s][SSL:%s]' % (name, host, bool(ssl)))
             return 'Error - failed running test for %s' % name
     testtorznab.exposed = True
+
+    def testMetron(self, **kwargs):
+        from mylar.extensions.providers.metron.runtime_controller import handle_test_metron
+        return handle_test_metron(**kwargs)
+    testMetron.exposed = True
+
+    def metronCompareCredits(self, issueid=None, annual=0, **kwargs):
+        from mylar.extensions.providers.metron.runtime_controller import handle_metron_compare_credits
+        return handle_metron_compare_credits(issueid=issueid, annual=annual, **kwargs)
+    metronCompareCredits.exposed = True
+
+    def getCreatorCSRFToken(self, **kwargs):
+        from mylar.extensions.creators.decision_controller import handle_get_creator_csrf_token
+        return handle_get_creator_csrf_token(**kwargs)
+    getCreatorCSRFToken.exposed = True
+
+    def confirmCreatorIdentity(self, **kwargs):
+        from mylar.extensions.creators.decision_controller import handle_confirm_creator_identity
+        return handle_confirm_creator_identity(**kwargs)
+    confirmCreatorIdentity.exposed = True
+
+    def rejectCreatorCandidate(self, **kwargs):
+        from mylar.extensions.creators.decision_controller import handle_reject_creator_candidate
+        return handle_reject_creator_candidate(**kwargs)
+    rejectCreatorCandidate.exposed = True
+
+    def reverseCreatorDecision(self, **kwargs):
+        from mylar.extensions.creators.decision_controller import handle_reverse_creator_decision
+        return handle_reverse_creator_decision(**kwargs)
+    reverseCreatorDecision.exposed = True
+
+    def getCreatorDecisionHistory(self, name_record_id=None, provider=None, provider_creator_id=None, limit=50, offset=0, **kwargs):
+        from mylar.extensions.creators.history_controller import handle_get_creator_decision_history
+        return handle_get_creator_decision_history(
+            name_record_id=name_record_id,
+            provider=provider,
+            provider_creator_id=provider_creator_id,
+            limit=limit,
+            offset=offset,
+            **kwargs
+        )
+    getCreatorDecisionHistory.exposed = True
+
+    def creator_registry(self, state='all', provider='all', search=None, sort='name_asc', page=1, page_size=25, **kwargs):
+        from mylar.extensions.creators.registry_controller import handle_creator_registry
+        return handle_creator_registry(
+            state=state,
+            provider=provider,
+            search=search,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+            serve_template_fn=serve_template,
+            **kwargs
+        )
+    creator_registry.exposed = True
+
+    def getCreatorRegistry(self, state='all', provider='all', search=None, sort='name_asc', page=1, page_size=25, **kwargs):
+        from mylar.extensions.creators.registry_controller import handle_get_creator_registry_json
+        return handle_get_creator_registry_json(
+            state=state,
+            provider=provider,
+            search=search,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+            **kwargs
+        )
+    getCreatorRegistry.exposed = True
+
+    def getCreatorConflictAnalysis(self, name_record_id=None, provider=None, provider_creator_id=None, **kwargs):
+        from mylar.extensions.creators.conflict_controller import handle_get_creator_conflict_analysis
+        return handle_get_creator_conflict_analysis(
+            name_record_id=name_record_id,
+            provider=provider,
+            provider_creator_id=provider_creator_id,
+            **kwargs
+        )
+    getCreatorConflictAnalysis.exposed = True
+
+    def resolveCreatorConflict(self, **kwargs):
+        from mylar.extensions.creators.conflict_controller import handle_resolve_creator_conflict
+        return handle_resolve_creator_conflict(**kwargs)
+    resolveCreatorConflict.exposed = True
 
     def orderThis(self, **kwargs):
         return

@@ -157,6 +157,17 @@ class Maintenance(object):
             if not mylar.MAINTENANCE_UPDATE:
                 logger.fdebug('[DB-CHECK-UPDATE] Nothing needs updating within dB.')
 
+        # Idempotent extension database migrations
+        self.sql_attachmylar()
+        try:
+            from mylar.extensions.migrations import run_extension_migrations
+            run_extension_migrations(self.dbmylar)
+        except Exception as e:
+            logger.error(f"[DB-CHECK-UPDATE] Extension migrations failed: {e}")
+            raise
+        finally:
+            self.sql_closemylar()
+
 
     def check_failed_update(self):
         self.sql_attach()
