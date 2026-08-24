@@ -207,3 +207,128 @@ jobs:
             VERSION=${{ steps.vars.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # 3. Pull Verification Job (Runs after publish to verify the registry-pulled image)
+  verify_published_image:
+    name: Verify Published Image from GHCR
+    needs: publish_ghcr
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and verify published registry image
+        run: |
+          set -euo pipefail
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          SHA_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA}"
+          PREVIEW_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:preview"
+
+          echo "[*] Pulling immutable SHA tag: $SHA_TAG"
+          docker pull "$SHA_TAG"
+
+          echo "[*] Pulling moving preview tag: $PREVIEW_TAG"
+          docker pull "$PREVIEW_TAG"
+
+          echo "[*] Comparing manifest digests..."
+          DIGEST_SHA=$(docker inspect --format '{{index .RepoDigests 0}}' "$SHA_TAG" | cut -d'@' -f2 || true)
+          DIGEST_PREVIEW=$(docker inspect --format '{{index .RepoDigests 0}}' "$PREVIEW_TAG" | cut -d'@' -f2 || true)
+          echo "SHA tag digest:     $DIGEST_SHA"
+          echo "Preview tag digest: $DIGEST_PREVIEW"
+          [ -n "$DIGEST_SHA" ]
+          [ -n "$DIGEST_PREVIEW" ]
+          [ "$DIGEST_SHA" = "$DIGEST_PREVIEW" ]
+
+          echo "[*] Inspecting pulled image OCI labels..."
+          LABELS=$(docker inspect --format '{{json .Config.Labels}}' "$SHA_TAG")
+          echo "Pulled image labels: $LABELS"
+          echo "$LABELS" | grep -q "org.opencontainers.image.title"
+          echo "$LABELS" | grep -q "org.opencontainers.image.description"
+          echo "$LABELS" | grep -q "org.opencontainers.image.url"
+          echo "$LABELS" | grep -q "org.opencontainers.image.source"
+          echo "$LABELS" | grep -q "org.opencontainers.image.licenses"
+          echo "$LABELS" | grep -q "org.opencontainers.image.revision"
+          echo "$LABELS" | grep -q "org.opencontainers.image.created"
+          echo "$LABELS" | grep -q "org.opencontainers.image.version"
+
+          echo "[*] Starting pulled image test container..."
+          TEST_DIR="/tmp/mylar-pulled-test"
+          mkdir -p "$TEST_DIR/config" "$TEST_DIR/comics" "$TEST_DIR/downloads"
+
+          docker run -d \
+            --name mylar-pulled-test \
+            -p 8091:8090 \
+            -e PUID=1001 \
+            -e PGID=1001 \
+            -e UMASK=022 \
+            -e TZ=Etc/UTC \
+            -v "$TEST_DIR/config:/config" \
+            -v "$TEST_DIR/comics:/comics" \
+            -v "$TEST_DIR/downloads:/downloads" \
+            "$SHA_TAG"
+
+          echo "[*] Waiting for pulled container readiness..."
+          READY=0
+          for i in {1..45}; do
+            if curl -s -f http://127.0.0.1:8091/home >/dev/null 2>&1; then
+              echo "[+] Pulled container responded successfully after ${i}s"
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            echo "[ERROR] Pulled container failed to become ready within 45s"
+            docker logs mylar-pulled-test || true
+            exit 1
+          fi
+
+          RUNNING=$(docker inspect -f '{{.State.Running}}' mylar-pulled-test)
+          [ "$RUNNING" = "true" ]
+
+          echo "[*] Verifying process identity on pulled container..."
+          PROC_USER=$(docker exec mylar-pulled-test ps -o user,args | grep -E 'python|Mylar' | awk '{print $1}' | head -n1 || true)
+          echo "Detected process user: $PROC_USER"
+          [ -n "$PROC_USER" ]
+          [ "$PROC_USER" != "root" ]
+          [ "$PROC_USER" != "0" ]
+          PROC_UID=$(docker exec mylar-pulled-test id -u "$PROC_USER")
+          echo "Resolved process UID: $PROC_UID"
+          [ "$PROC_UID" = "1001" ]
+
+          echo "[*] Testing endpoints on pulled container..."
+          HOME_RESP=$(curl -s http://127.0.0.1:8091/home)
+          echo "$HOME_RESP" | grep -i "mylar" >/dev/null
+
+          CREATORS_RESP=$(curl -s http://127.0.0.1:8091/creators)
+          echo "$CREATORS_RESP" | grep -i "creator" >/dev/null
+
+          echo "[*] Verifying /config directory persistence and ownership..."
+          ls -la "$TEST_DIR/config"
+          CONFIG_UID=$(stat -c '%u' "$TEST_DIR/config" || stat -f '%u' "$TEST_DIR/config")
+          echo "Config dir UID: $CONFIG_UID"
+          [ "$CONFIG_UID" = "1001" ]
+
+          echo "[*] Verifying /app/mylar3 write isolation..."
+          docker exec mylar-pulled-test test ! -f /app/mylar3/config.ini
+          docker exec mylar-pulled-test test ! -f /app/mylar3/mylar.db
+
+          echo "[+] Pulled registry image verified successfully!"
+
+      - name: Cleanup pulled test container
+        if: always()
+        run: |
+          docker rm -f mylar-pulled-test 2>/dev/null || true
+          rm -rf /tmp/mylar-pulled-test 2>/dev/null || true
