@@ -1,40 +1,24 @@
-ARG BASE_VERSION=3.8.2-alpine3.11
-FROM python:${BASE_VERSION}
+ARG BASE_IMAGE=python:3.11-alpine3.20
+FROM
 
-# set version label
-ARG MYLAR_COMMIT=v0.3.0
-ARG ORG=MylarComics
-LABEL version ${BASE_VERSION}_${MYLAR_COMMIT}
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION="0.7.0-creator-preview.1"
 
-RUN \
-echo "**** install system packages ****" && \
- apk add --no-cache \
- git=2.24.3-r0 \
- # cfscrape dependecies
- nodejs=12.15.0-r1 \
- # unrar-cffi & Pillow dependencies
- build-base=0.5-r1 \
- # unar-cffi dependencies
- libffi-dev=3.2.1-r6 \
- # Pillow dependencies
- zlib-dev=1.2.11-r3 \
- jpeg-dev=8-r6
+LABEL org.opencontainers.image.title="Mylar3 Modern Creator Edition"       org.opencontainers.image.description="Automated Comic Book Downloader with Creator Identity Resolution"       org.opencontainers.image.url="https://github.com/burnshroom/mylar3.1"       org.opencontainers.image.source="https://github.com/burnshroom/mylar3.1"       org.opencontainers.image.revision=       org.opencontainers.image.created=       org.opencontainers.image.version=       org.opencontainers.image.licenses="GPL-3.0-only"
 
-# It might be better to check out release tags than nightly HEAD.
-# For development work I reccomend mounting a full git repo from the
-# docker host over /app/mylar.
-RUN echo "**** install app ****" && \
- git config --global advice.detachedHead false && \
- git clone https://github.com/${ORG}/mylar3.git --depth 1 --branch ${MYLAR_COMMIT} --single-branch /app/mylar
+RUN apk add --no-cache     bash     curl     git     build-base     libffi-dev     zlib-dev     jpeg-dev     tzdata     shadow     su-exec
 
-RUN echo "**** install requirements ****" && \
- pip3 install --no-cache-dir -U -r /app/mylar/requirements.txt && \
- rm -rf ~/.cache/pip/*
+WORKDIR /app/mylar3
 
-# TODO image could be further slimmed by moving python wheel building into a
-# build image and copying the results to the final image.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -U pip setuptools wheel &&     pip install --no-cache-dir -r requirements.txt
 
-# ports and volumes
+COPY . .
+
+ENV PUID=1000     PGID=1000     UMASK=002     TZ=Etc/UTC
+
 VOLUME /config /comics /downloads
 EXPOSE 8090
-CMD ["python3", "/app/mylar/Mylar.py", "--nolaunch", "--quiet", "--datadir", "/config/mylar"]
+
+ENTRYPOINT ["python3", "/app/mylar3/Mylar.py", "--nolaunch", "--quiet", "--datadir", "/config"]

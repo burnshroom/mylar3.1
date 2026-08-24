@@ -1,72 +1,101 @@
-# Build a LSIO compatible container for dev branches
-name: Build & Publish Feature Container
+name: Build & Package Container
 
-# Run on any branch that isn't a main branch
 on:
-    push:
-        branches-ignore:
-            - 'stable'
-            - 'nightly'
+  push:
+    branches:
+      - 'feature/**'
+      - 'main'
+    tags:
+      - 'v*'
+      - 'preview*'
+  pull_request:
+    branches:
+      - 'main'
+      - 'stable'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish image to GHCR (true/false)'
+        required: true
+        type: boolean
+        default: false
+      tag_name:
+        description: 'Optional custom image tag'
+        required: false
+        type: string
+        default: 'preview'
 
-# Cancel previous run on this branch if a new push is made
 concurrency:
-    group: bpfc-${{ github.ref }}
-    cancel-in-progress: true
+  group: container-build-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-    push_to_registry:
-        if: ${{ github.repository != 'MylarComics/mylar3' }}
-        name: Build Docker image and push to GHCR
-        runs-on: ubuntu-latest
-        permissions:
-          contents: read
-          packages: write
-          attestations: write
-          id-token: write
-        steps:
-          - name: Checkout LSIO mylar3 repository (unstable)
-            uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-            with:
-              repository: 'linuxserver/docker-mylar3'
-              ref: 'nightly'
+  # 1. Verification Job (Dry Run - No Push)
+  build_verify:
+    name: Build & Verify Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          - name: Edit Dockerfile for current repo/branch
-            run: |
-              sed -i "/ARG MYLAR3_RELEASE/aENV PYDEVD_DISABLE_FILE_VALIDATION=1" Dockerfile
-              sed -i "s@MylarComics/mylar3@${{github.repository}}@g" Dockerfile
-              sed -i "s@commits/nightly@commits/${{github.ref_name}}@g" Dockerfile
-              sed -i "/requirements.txt/a\ \ pip install --no-cache-dir --find-links https://wheel-index.linuxserver.io/alpine-3.23/ debugpy && \\\\" Dockerfile
-              sed -i "/EXPOSE 8090/aEXPOSE 5678" Dockerfile
-              sed -i "s@python3 /app/mylar3/Mylar.py@python3 -m debugpy --listen 0.0.0.0:5678 /app/mylar3/Mylar.py@g" ./root/etc/s6-overlay/s6-rc.d/svc-mylar3/run
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-          - name: Log in to the Container registry
-            uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-            with:
-              registry: ${{ env.REGISTRY }}
-              username: ${{ github.actor }}
-              password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image (Validation only, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-          - name: Extract metadata (tags, labels) for Docker
-            id: meta
-            uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5.8.0
-            with:
-              images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+  # 2. Publishing Job (Runs only on workflow_dispatch with publish=true or release tags)
+  publish_ghcr:
+    name: Publish Container to GHCR
+    needs: build_verify
+    if: (github.event_name == 'workflow_dispatch' && inputs.publish == true) || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-          - name: Build and push Docker image
-            id: push
-            uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-            with:
-              context: .
-              push: true
-              tags: ${{ steps.meta.outputs.tags }}
-              labels: ${{ steps.meta.outputs.labels }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-          - name: Cleanup old untagged GHCR images
-            uses: dataaxiom/ghcr-cleanup-action@cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4 # v1.0.16
-            with:
-              keep-n-untagged: 5
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract Docker metadata (Tags & Labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=ref,event=tag
+            type=raw,value=${{ inputs.tag_name }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag_name != '' }}
+
+      - name: Build and push container to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
