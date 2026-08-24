@@ -29,3 +29,22 @@ __pycache__
 .devcontainer/config
 .devcontainer/comics
 .devcontainer/downloads
+
+# Database and journal files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.mylar_maintenance.db
+data_test/
+
+# Runtime, test fixtures, and staging exclusions
+.codex-remote-attachments/
+_attachment_excerpt.txt
+None/
+scratch/
+*.log
+
+# Local container overrides
+docker-compose.override.yml
+.env
