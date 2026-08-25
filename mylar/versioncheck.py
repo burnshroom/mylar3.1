@@ -502,3 +502,26 @@ def versionload(cli_values=None, carepackage_call=False):
         if mylar.CURRENT_VERSION != mylar.LATEST_VERSION and mylar.INSTALL_TYPE != 'win' and mylar.COMMITS_BEHIND > 0:
              logger.info('Auto-updating has been enabled. Attempting to auto-update.')
              mylar.SIGNAL = 'update'
+
+
+def get_build_identity():
+    """
+    Returns the canonical build version string for modern/classic UI and sidebars.
+    Format:
+      - 'v3.1.0 · Modern <short_sha>' when build metadata is present.
+      - 'Modern Build · development' when metadata is absent or 'unknown'.
+    """
+    build_sha = os.environ.get('MYLAR_BUILD_SHA') or os.environ.get('VCS_REF')
+    if not build_sha or build_sha.strip().lower() in ('', 'unknown', 'none', 'null'):
+        raw_ver = getattr(mylar, 'CURRENT_VERSION', None)
+        if raw_ver and len(str(raw_ver)) >= 7 and not str(raw_ver).startswith('v') and str(raw_ver) != 'unknown':
+            build_sha = str(raw_ver)
+
+    if build_sha and build_sha.strip().lower() not in ('', 'unknown', 'none', 'null', 'development'):
+        clean_sha = build_sha.strip()[:8]
+        app_ver = getattr(mylar, 'CURRENT_VERSION_NAME', None) or "v3.1.0"
+        if not str(app_ver).startswith("v"):
+            app_ver = f"v{app_ver}"
+        return f"{app_ver} · Modern {clean_sha}"
+    else:
+        return "Modern Build · development"

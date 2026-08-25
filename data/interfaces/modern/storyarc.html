@@ -1,11 +1,8 @@
 <%inherit file="base.html"/>
-<%
-    import mylar
-%>
 
 <%def name="body()">
     <input type="hidden" id="page_name" value="storyarc" />
-    <input type="hidden" id="cbl_csrf_token" value="${mylar.extensions.storyarcs.controller.get_or_create_cbl_csrf_token()}" />
+    <input type="hidden" id="cbl_csrf_token" value="${cbl_csrf_token}" />
 
     <div class="content-header">
         <div class="content-header-left">
@@ -244,14 +241,14 @@
                     <div id="applyLibraryOptionsGroup" class="library-options-group">
                         <div class="checkbox-option-row">
                             <label class="checkbox-label" for="cblIssuesOnly">
-                                <input type="checkbox" id="cblIssuesOnly" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) else ''} onchange="handleImportOptionChange()" />
+                                <input type="checkbox" id="cblIssuesOnly" ${'checked="checked"' if cbl_issues_only else ''} onchange="handleImportOptionChange()" />
                                 <span class="checkbox-custom"></span>
                                 <span class="checkbox-text"><strong>Only mark issues from list as wanted</strong> (suppresses auto-wanting entire new series)</span>
                             </label>
                         </div>
                         <div class="checkbox-option-row">
                             <label class="checkbox-label" for="cblIgnoreArchived">
-                                <input type="checkbox" id="cblIgnoreArchived" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) else ''} onchange="handleImportOptionChange()" />
+                                <input type="checkbox" id="cblIgnoreArchived" ${'checked="checked"' if cbl_ignore_archived else ''} onchange="handleImportOptionChange()" />
                                 <span class="checkbox-custom"></span>
                                 <span class="checkbox-text"><strong>Do not mark Archived issues as Wanted</strong> (leave existing Archived issues untouched)</span>
                             </label>

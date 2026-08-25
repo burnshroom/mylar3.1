@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -U pip setuptools wheel && \
 FROM python:3.11-alpine3.20
 
 ARG BUILD_DATE
-ARG VCS_REF
+ARG VCS_REF=unknown
 ARG VERSION="0.7.0-creator-preview.1"
 
 LABEL org.opencontainers.image.title="Mylar3 Modern Creator Edition" \
@@ -54,7 +54,8 @@ RUN chmod +x /app/mylar3/docker/entrypoint.sh
 ENV PUID=1000 \
     PGID=1000 \
     UMASK=002 \
-    TZ=Etc/UTC
+    TZ=Etc/UTC \
+    MYLAR_BUILD_SHA="${VCS_REF}"
 
 VOLUME /config /comics /downloads
 EXPOSE 8090

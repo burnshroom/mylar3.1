@@ -128,10 +128,41 @@ def serve_template(templatename, **kwargs):
                  'next': os.path.join(mylar.CONFIG.HTTP_ROOT, 'interfaces', 'carbon', 'images', 'next.gif'),
                  'prev': os.path.join(mylar.CONFIG.HTTP_ROOT, 'interfaces', 'carbon', 'images', 'prev.gif')}
 
+    from mylar.versioncheck import get_build_identity
+    build_identity = kwargs.pop('build_identity', None) or get_build_identity()
+
+    from mylar.extensions.storyarcs.controller import get_or_create_cbl_csrf_token
+    cbl_csrf_token = kwargs.pop('cbl_csrf_token', None)
+    if not cbl_csrf_token:
+        try:
+            cbl_csrf_token = get_or_create_cbl_csrf_token()
+        except Exception:
+            cbl_csrf_token = ''
+
+    cbl_issues_only = kwargs.pop('cbl_issues_only', None)
+    if cbl_issues_only is None:
+        cbl_issues_only = getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+
+    cbl_ignore_archived = kwargs.pop('cbl_ignore_archived', None)
+    if cbl_ignore_archived is None:
+        cbl_ignore_archived = getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else False
+
     _hplookup = TemplateLookup(directories=lookup_dirs)
     try:
         template = _hplookup.get_template(templatename)
-        return template.render(http_root=mylar.CONFIG.HTTP_ROOT, interface=mylar.CONFIG.INTERFACE, icons=icons, gl_messages=mylar.GLOBAL_MESSAGES, sse_key=mylar.SSE_KEY, pre_update=mylar.UPDATE_VALUE, **kwargs)
+        return template.render(
+            http_root=mylar.CONFIG.HTTP_ROOT,
+            interface=mylar.CONFIG.INTERFACE,
+            icons=icons,
+            gl_messages=mylar.GLOBAL_MESSAGES,
+            sse_key=mylar.SSE_KEY,
+            pre_update=mylar.UPDATE_VALUE,
+            build_identity=build_identity,
+            cbl_csrf_token=cbl_csrf_token,
+            cbl_issues_only=cbl_issues_only,
+            cbl_ignore_archived=cbl_ignore_archived,
+            **kwargs
+        )
     except exceptions.TopLevelLookupException as e:
         logger.error(f"[TEMPLATE] Template not found in lookup chain {lookup_dirs}: {templatename} ({e})")
         return exceptions.html_error_template().render()

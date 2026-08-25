@@ -110,12 +110,14 @@
     }
 
     function openCblModal() {
-        $('#cblImportModal').fadeIn(150);
+        $('#cblImportModal').addClass('active').fadeIn(150);
+        $('body').addClass('modal-open');
         switchImportTab('upload');
     }
 
     function closeCblModal() {
-        $('#cblImportModal').fadeOut(150);
+        $('#cblImportModal').removeClass('active').fadeOut(150);
+        $('body').removeClass('modal-open');
     }
 
     function handleFileSelected(files) {
@@ -677,12 +679,19 @@
     }
 
     function openDeleteArcModal() {
-        $('#deleteModalAlert').hide();
-        $('#deleteArcModal').fadeIn(150);
+        $('#deleteModalAlert').hide().empty();
+        $('#confirmDeleteArcBtn').prop('disabled', false).text('Delete Story Arc');
+        $('#deleteArcModal').addClass('active').fadeIn(150);
+        $('body').addClass('modal-open');
+        setTimeout(function() {
+            $('#deleteArcModal').find('.btn-secondary').focus();
+        }, 50);
     }
 
     function closeDeleteArcModal() {
-        $('#deleteArcModal').fadeOut(150);
+        if ($('#confirmDeleteArcBtn').prop('disabled')) return;
+        $('#deleteArcModal').removeClass('active').fadeOut(150);
+        $('body').removeClass('modal-open');
     }
 
     function confirmDeleteStoryArc() {
@@ -724,17 +733,20 @@
         currentReconcileArcId = arcId || pageConfig.storyarcid || $('#page_storyarcid').val();
         if (!currentReconcileArcId) return;
 
-        $('#detailReconAlert').hide();
+        $('#detailReconAlert').hide().empty();
         $('#detailReconSummaryContainer').hide();
         $('#detailReconTableWrap').hide();
         $('#confirmReconcileBtn').prop('disabled', false).text('Apply Library Changes');
-        $('#reconcileArcModal').fadeIn(150);
+        $('#reconcileArcModal').addClass('active').fadeIn(150);
+        $('body').addClass('modal-open');
 
         refreshDetailReconcilePreview();
     }
 
     function closeReconcileModal() {
-        $('#reconcileArcModal').fadeOut(150);
+        if ($('#confirmReconcileBtn').prop('disabled') && $('#confirmReconcileBtn').text().indexOf('Applying') !== -1) return;
+        $('#reconcileArcModal').removeClass('active').fadeOut(150);
+        $('body').removeClass('modal-open');
     }
 
     function refreshDetailReconcilePreview() {
@@ -963,6 +975,38 @@
                 }
             });
         }
+
+        // Global Escape key and Backdrop click modal closing handlers
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                if ($('#deleteArcModal').hasClass('active') || $('#deleteArcModal').is(':visible')) {
+                    if (!$('#confirmDeleteArcBtn').prop('disabled')) {
+                        closeDeleteArcModal();
+                    }
+                }
+                if ($('#reconcileArcModal').hasClass('active') || $('#reconcileArcModal').is(':visible')) {
+                    closeReconcileModal();
+                }
+                if ($('#cblImportModal').hasClass('active') || $('#cblImportModal').is(':visible')) {
+                    closeCblModal();
+                }
+            }
+        });
+
+        $(document).on('click', '.modal-overlay', function(e) {
+            if ($(e.target).hasClass('modal-overlay')) {
+                var modalId = $(e.target).attr('id');
+                if (modalId === 'deleteArcModal') {
+                    if (!$('#confirmDeleteArcBtn').prop('disabled')) {
+                        closeDeleteArcModal();
+                    }
+                } else if (modalId === 'reconcileArcModal') {
+                    closeReconcileModal();
+                } else if (modalId === 'cblImportModal') {
+                    closeCblModal();
+                }
+            }
+        });
     });
 
     window.switchImportTab = switchImportTab;

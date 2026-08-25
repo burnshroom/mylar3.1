@@ -233,22 +233,8 @@
                         </div>
                     </div>
 
-                    <div id="version" class="sidebar-version" title="${mylar.CURRENT_VERSION_NAME or mylar.CURRENT_VERSION} (${mylar.CONFIG.GIT_BRANCH})">
-                        <%
-                            raw_ver = str(mylar.CURRENT_VERSION_NAME or mylar.CURRENT_VERSION or "v0.7.5")
-                            if len(raw_ver) > 10 and not raw_ver.startswith("v"):
-                                ver_display = raw_ver[:7]
-                            else:
-                                ver_display = raw_ver
-
-                            raw_branch = str(mylar.CONFIG.GIT_BRANCH or "master")
-                            if len(raw_branch) > 12:
-                                branch_display = raw_branch[:7]
-                            else:
-                                branch_display = raw_branch
-                        %>
-                        <span class="version-number">${ver_display}</span>
-                        <span class="version-branch">(${branch_display})</span>
+                    <div id="version" class="sidebar-version" title="${build_identity}">
+                        <span class="version-number">${build_identity}</span>
                     </div>
                     
                     <div id="actions" class="sidebar-actions">

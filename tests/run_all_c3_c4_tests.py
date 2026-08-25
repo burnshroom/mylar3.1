@@ -29,6 +29,8 @@ TEST_SUITES = [
     ("Phase C4.15 (Keep-Existing Conflict Resolution)", "tests/extensions/test_phase_c4_15.py"),
     ("Phase C4.16 (Conflict Transfer & Safe Reversal)", "tests/extensions/test_phase_c4_16.py"),
     ("Phase C4.17 (End-to-End Acceptance Audit)", "tests/extensions/test_phase_c4_17.py"),
+    ("Phase CBL Corrective (Actionable CBL & Security)", "tests/extensions/test_phase_cbl_corrective.py"),
+    ("Phase Runtime Corrective (Rendering, Build ID, Modal)", "tests/extensions/test_runtime_corrective.py"),
 ]
 
 

@@ -1,11 +1,8 @@
 <%inherit file="base.html"/>
-<%
-    import mylar
-%>
 
 <%def name="body()">
     <input type="hidden" id="page_name" value="storyarc_detail" />
-    <input type="hidden" id="cbl_csrf_token" value="${mylar.extensions.storyarcs.controller.get_or_create_cbl_csrf_token()}" />
+    <input type="hidden" id="cbl_csrf_token" value="${cbl_csrf_token}" />
 
     <div class="content-header">
         <div class="content-header-left">
@@ -103,7 +100,7 @@
                         <div class="provenance-grid">
                             <div class="provenance-item">
                                 <span class="provenance-label">Source</span>
-                                <span class="provenance-val"><code>${manifest['SourceName']}</code></span>
+                                <span class="provenance-val"><code>${manifest.get('SourceName', 'CBL File')}</code></span>
                             </div>
                             %if manifest.get('SourceType') == 'upload':
                                 <div class="provenance-item">
@@ -114,22 +111,26 @@
                                 <div class="provenance-item">
                                     <span class="provenance-label">Repository</span>
                                     <span class="provenance-val">
-                                        <a href="${manifest['RepoURL']}" target="_blank" rel="noopener noreferrer" class="provenance-link">${manifest['RepoURL']}</a>
-                                        <code>@ ${manifest['RepoCommit'][:8] if manifest['RepoCommit'] else 'main'}</code>
+                                        %if manifest.get('RepoURL'):
+                                            <a href="${manifest['RepoURL']}" target="_blank" rel="noopener noreferrer" class="provenance-link">${manifest['RepoURL']}</a>
+                                            <code>@ ${manifest['RepoCommit'][:8] if manifest.get('RepoCommit') else 'main'}</code>
+                                        %else:
+                                            <span>—</span>
+                                        %endif
                                     </span>
                                 </div>
                                 <div class="provenance-item">
                                     <span class="provenance-label">Repo Path</span>
-                                    <span class="provenance-val"><code>${manifest['RepoPath']}</code></span>
+                                    <span class="provenance-val"><code>${manifest.get('RepoPath', '—')}</code></span>
                                 </div>
                             %endif
                             <div class="provenance-item">
                                 <span class="provenance-label">SHA-256</span>
-                                <span class="provenance-val"><code class="hash-code">${manifest['SHA256']}</code></span>
+                                <span class="provenance-val"><code class="hash-code">${manifest.get('SHA256', '—')}</code></span>
                             </div>
                             <div class="provenance-item">
                                 <span class="provenance-label">Imported</span>
-                                <span class="provenance-val">${manifest['ImportTime']}</span>
+                                <span class="provenance-val">${manifest.get('ImportTime', '—')}</span>
                             </div>
                         </div>
                     </div>
@@ -172,10 +173,18 @@
                                         status_class = 'badge-status-unmatched'
 
                                     issue_arc_id = item.get('IssueArcID') or f"{storyarcid}_{item.get('ReadingOrder')}"
+                                    issue_num = item.get('IssueNumber') or item.get('Issue_Number') or item.get('Issue_No') or '?'
+                                    comic_name = item.get('ComicName', 'Unknown')
+                                    series_year = item.get('SeriesYear') or ''
+                                    reading_order = item.get('ReadingOrder', 1)
+                                    issue_name = item.get('IssueName') or '—'
+                                    store_date = item.get('StoreDate') or '—'
+                                    comic_id = item.get('ComicID') or ''
+                                    issue_id = item.get('IssueID') or ''
                                 %>
                                 <tr id="arcRow_${issue_arc_id}">
                                     <td class="col-order">
-                                        <span class="reading-order-pill">#${item['ReadingOrder']}</span>
+                                        <span class="reading-order-pill">#${reading_order}</span>
                                     </td>
                                     <td class="col-cover">
                                         <div class="issue-cover-frame arc-table-thumb">
@@ -184,26 +193,26 @@
                                                     <rect x="4" y="2" width="16" height="20" rx="2"></rect>
                                                 </svg>
                                             </div>
-                                            %if item.get('IssueID'):
-                                                <img src="IssueThumbnail?issueid=${item['IssueID']}" alt="#${item['IssueNumber']}" class="issue-cover-img" onload="this.classList.add('loaded');" onerror="this.style.display='none';" />
+                                            %if issue_id:
+                                                <img src="IssueThumbnail?issueid=${issue_id}" alt="#${issue_num}" class="issue-cover-img" onload="this.classList.add('loaded');" onerror="this.style.display='none';" />
                                             %endif
                                         </div>
                                     </td>
                                     <td class="col-series">
-                                        %if item.get('IsMonitored') and item.get('ComicID'):
-                                            <a href="comicDetails?ComicID=${item['ComicID']}" class="series-link" title="View Series">${item['ComicName']} (${item['SeriesYear']})</a>
+                                        %if item.get('IsMonitored') and comic_id:
+                                            <a href="comicDetails?ComicID=${comic_id}" class="series-link" title="View Series">${comic_name} ${f"({series_year})" if series_year else ""}</a>
                                         %else:
-                                            <span class="series-unmonitored-text">${item['ComicName']} (${item['SeriesYear']})</span>
+                                            <span class="series-unmonitored-text">${comic_name} ${f"({series_year})" if series_year else ""}</span>
                                         %endif
                                     </td>
                                     <td class="col-issue">
-                                        <strong>#${item['IssueNumber']}</strong>
+                                        <strong>#${issue_num}</strong>
                                     </td>
                                     <td class="col-title">
-                                        <span class="chapter-title">${item['IssueName'] or '—'}</span>
+                                        <span class="chapter-title">${issue_name}</span>
                                     </td>
                                     <td class="col-date">
-                                        <span class="date-text">${item['StoreDate'] or '—'}</span>
+                                        <span class="date-text">${store_date}</span>
                                     </td>
                                     <td class="col-status">
                                         <span class="badge-status ${status_class}" id="statusBadge_${issue_arc_id}">${res_state}</span>
@@ -220,8 +229,8 @@
                                                 </button>
                                             %endif
 
-                                            %if item.get('IsMonitored') and item.get('ComicID'):
-                                                <a href="comicDetails?ComicID=${item['ComicID']}" class="btn-action-open" title="Open in Series Details">
+                                            %if item.get('IsMonitored') and comic_id:
+                                                <a href="comicDetails?ComicID=${comic_id}" class="btn-action-open" title="Open in Series Details">
                                                     Series
                                                     <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                         <path d="M6 3l5 5-5 5"></path>
@@ -257,15 +266,24 @@
                             status_class = 'badge-status-unmonitored'
                         elif 'Unknown' in res_state or 'Unmatched' in res_state:
                             status_class = 'badge-status-unmatched'
+
+                        issue_num = item.get('IssueNumber') or item.get('Issue_Number') or item.get('Issue_No') or '?'
+                        comic_name = item.get('ComicName', 'Unknown')
+                        series_year = item.get('SeriesYear') or ''
+                        reading_order = item.get('ReadingOrder', 1)
+                        issue_name = item.get('IssueName') or ''
+                        store_date = item.get('StoreDate') or '—'
+                        comic_id = item.get('ComicID') or ''
+                        issue_id = item.get('IssueID') or ''
                     %>
                     <div class="arc-shelf-card ${'is-monitored' if item.get('IsMonitored') else ''}"
-                         %if item.get('IsMonitored') and item.get('ComicID'):
-                             onclick="window.location.href='comicDetails?ComicID=${item['ComicID']}';"
+                         %if item.get('IsMonitored') and comic_id:
+                             onclick="window.location.href='comicDetails?ComicID=${comic_id}';"
                          %endif
                     >
                         <!-- Explicit Order Pill & Status Header -->
                         <div class="arc-shelf-card-header">
-                            <span class="arc-shelf-order-pill" aria-label="Reading order #${item['ReadingOrder']}">#${item['ReadingOrder']}</span>
+                            <span class="arc-shelf-order-pill" aria-label="Reading order #${reading_order}">#${reading_order}</span>
                             <span class="badge-status ${status_class} arc-shelf-status-pill">${res_state}</span>
                         </div>
 
@@ -278,22 +296,22 @@
                                         <path d="M4 18h16M8 6h8M8 10h8"></path>
                                     </svg>
                                 </div>
-                                %if item.get('IssueID'):
-                                    <img src="IssueThumbnail?issueid=${item['IssueID']}" alt="${item['ComicName']} #${item['IssueNumber']}" class="issue-cover-img" onload="this.classList.add('loaded');" onerror="this.style.display='none';" />
+                                %if issue_id:
+                                    <img src="IssueThumbnail?issueid=${issue_id}" alt="${comic_name} #${issue_num}" class="issue-cover-img" onload="this.classList.add('loaded');" onerror="this.style.display='none';" />
                                 %endif
                             </div>
                         </div>
 
                         <!-- Shelf Metadata: Series, Issue, Date, Chapter Title -->
                         <div class="arc-shelf-info">
-                            <h4 class="arc-shelf-series">${item['ComicName']}</h4>
+                            <h4 class="arc-shelf-series">${comic_name}</h4>
                             <div class="arc-shelf-meta-line">
-                                <span class="arc-shelf-issue-num">#${item['IssueNumber']}</span>
+                                <span class="arc-shelf-issue-num">#${issue_num}</span>
                                 <span class="arc-shelf-meta-sep">•</span>
-                                <span class="arc-shelf-date">${item['StoreDate'] or '—'}</span>
+                                <span class="arc-shelf-date">${store_date}</span>
                             </div>
-                            %if item.get('IssueName'):
-                                <p class="arc-shelf-title" title="${item['IssueName']}">${item['IssueName']}</p>
+                            %if issue_name:
+                                <p class="arc-shelf-title" title="${issue_name}">${issue_name}</p>
                             %endif
                         </div>
                     </div>
@@ -342,13 +360,13 @@
                     <div class="library-options-group" style="border-top:none; padding-top:0;">
                         <div class="checkbox-option-row">
                             <label class="checkbox-label" for="detailIssuesOnly">
-                                <input type="checkbox" id="detailIssuesOnly" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) else ''} onchange="refreshDetailReconcilePreview()" />
+                                <input type="checkbox" id="detailIssuesOnly" ${'checked="checked"' if cbl_issues_only else ''} onchange="refreshDetailReconcilePreview()" />
                                 <span class="checkbox-text"><strong>Only mark issues from list as wanted</strong> (suppresses auto-wanting entire new series)</span>
                             </label>
                         </div>
                         <div class="checkbox-option-row">
                             <label class="checkbox-label" for="detailIgnoreArchived">
-                                <input type="checkbox" id="detailIgnoreArchived" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) else ''} onchange="refreshDetailReconcilePreview()" />
+                                <input type="checkbox" id="detailIgnoreArchived" ${'checked="checked"' if cbl_ignore_archived else ''} onchange="refreshDetailReconcilePreview()" />
                                 <span class="checkbox-text"><strong>Do not mark Archived issues as Wanted</strong> (preserves existing Archived status)</span>
                             </label>
                         </div>
