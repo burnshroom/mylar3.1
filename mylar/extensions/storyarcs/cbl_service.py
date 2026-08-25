@@ -52,7 +52,7 @@ STAGED_CBL_MANIFESTS = {
 def get_staged_cbl_path(filename):
     """
     Finds staged CBL file in configured data directories or staging fallback locations.
-    
+
     :param filename: Staged manifest filename
     :return: Absolute file path if found and readable, otherwise None
     """
@@ -75,7 +75,7 @@ def get_staged_cbl_path(filename):
 def sanitize_cbl_filename(filename):
     """
     Sanitizes user-provided CBL/XML filenames to avoid directory traversal.
-    
+
     :param filename: Filename from user upload header
     :return: Safe basename string
     """
@@ -88,29 +88,48 @@ def sanitize_cbl_filename(filename):
     return clean
 
 
-def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None):
+def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None, import_mode='apply_library', issuesonly=None, ignorearchived=None):
     """
     Parses and authoritatively reconciles a CBL/XML reading list against the database.
-    
+
     Safety & Security:
     - Strictly rejects XXE (DOCTYPE / custom ENTITY).
     - Enforces 1,000 book maximum node ceiling.
     - Resolves entries strictly by ComicVine Series/Issue IDs from <Database Name="cv">.
     - Never falls back to fuzzy or heuristic title/year matching.
-    
+
     Resolution States:
     - 'Downloaded': Series and Issue monitored; local file exists on disk.
     - 'Missing (Monitored)': Series and Issue monitored; local file missing.
     - 'Unmonitored Series': Series not monitored in local Mylar library.
     - 'Unknown / Unmatched Reference': Missing or unparseable ComicVine IDs.
-    
+
+    Predicted Actions:
+    - 'No action needed — Downloaded': Issue is already Downloaded.
+    - 'No action needed — Already Wanted': Issue is already Wanted.
+    - 'No action needed — Snatched': Issue is already Snatched.
+    - 'No action needed': Issue is in Failed state.
+    - 'Mark issue Wanted': Monitored skipped issue (or archived when ignorearchived=False) to be marked Wanted.
+    - 'Add series and mark issue Wanted': Unmonitored series to be added and issue marked Wanted.
+    - 'Skipped because Archived': Monitored archived issue excluded by ignorearchived setting.
+    - 'Reading-list entry only': Manifest entry recorded without modifying library.
+    - 'Cannot resolve safely': Missing or invalid ComicVine ID or missing issue reference.
+
     :param raw_bytes: Raw XML / CBL bytes
     :param sanitized_name: Sanitized manifest filename
     :param myDB: Optional DBConnection instance
-    :return: Dictionary containing reconciliation results and metadata
+    :param import_mode: 'apply_library' or 'reading_list_only'
+    :param issuesonly: Overrides autowant_all when adding new volume (default from CONFIG)
+    :param ignorearchived: Skips marking archived issues wanted (default from CONFIG)
+    :return: Dictionary containing reconciliation results, summary metrics, and metadata
     """
     if myDB is None:
         myDB = db.DBConnection()
+
+    if issuesonly is None:
+        issuesonly = getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+    if ignorearchived is None:
+        ignorearchived = getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else False
 
     raw_str_lower = raw_bytes.decode('utf-8', errors='ignore').lower()
     if '<!doctype' in raw_str_lower or '<!entity' in raw_str_lower:
@@ -140,6 +159,12 @@ def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None):
     publisher = root.findtext('.//Publisher') or root.attrib.get('Publisher') or 'Comic'
 
     reconciled = []
+    unmonitored_series_ids = set()
+    issues_to_want_count = 0
+    unchanged_count = 0
+    archived_excluded_count = 0
+    unresolved_count = 0
+
     for idx, book in enumerate(books, start=1):
         sname = book.get('Series', '')
         vyear = book.get('Volume', '')
@@ -150,11 +175,13 @@ def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None):
         cv_iid = cvelem.get('Issue') if cvelem is not None else None
 
         res_state = 'Unknown / Unmatched Reference'
+        pred_action = 'Cannot resolve safely'
         mylar_sid = None
         mylar_sname = None
         mylar_iid = None
         mylar_ititle = None
         mylar_loc = None
+        iss_status = None
 
         if cv_sid and cv_iid:
             try:
@@ -165,29 +192,73 @@ def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None):
                 valid_cv = False
 
             if valid_cv:
-                comic = myDB.selectone("SELECT ComicID, ComicName, ComicYear FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
+                comic = myDB.selectone("SELECT ComicID, ComicName, ComicYear, Status FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
                 if not comic:
                     res_state = 'Unmonitored Series'
+                    if import_mode == 'apply_library':
+                        pred_action = 'Add series and mark issue Wanted'
+                        unmonitored_series_ids.add(cv_sid)
+                        issues_to_want_count += 1
+                    else:
+                        pred_action = 'Reading-list entry only'
+                        unchanged_count += 1
                 else:
                     mylar_sid = comic['ComicID']
                     mylar_sname = comic['ComicName']
                     iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
                     if not iss:
                         iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+
                     if not iss:
                         res_state = 'Unknown / Unmatched Reference'
+                        pred_action = 'Cannot resolve safely'
+                        unresolved_count += 1
                     else:
                         mylar_iid = iss['IssueID']
                         mylar_ititle = iss['IssueName']
+                        iss_status = iss['Status']
+
                         if iss['Status'] == 'Downloaded' and iss['Location'] and iss['Location'] != 'None':
                             res_state = 'Downloaded'
                             mylar_loc = iss['Location']
                         else:
                             res_state = 'Missing (Monitored)'
+
+                        if import_mode == 'reading_list_only':
+                            pred_action = 'Reading-list entry only'
+                            unchanged_count += 1
+                        else:
+                            if iss_status == 'Downloaded':
+                                pred_action = 'No action needed — Downloaded'
+                                unchanged_count += 1
+                            elif iss_status == 'Wanted':
+                                pred_action = 'No action needed — Already Wanted'
+                                unchanged_count += 1
+                            elif iss_status == 'Snatched':
+                                pred_action = 'No action needed — Snatched'
+                                unchanged_count += 1
+                            elif iss_status == 'Failed':
+                                pred_action = 'No action needed'
+                                unchanged_count += 1
+                            elif iss_status == 'Archived':
+                                if ignorearchived:
+                                    pred_action = 'Skipped because Archived'
+                                    archived_excluded_count += 1
+                                    unchanged_count += 1
+                                else:
+                                    pred_action = 'Mark issue Wanted'
+                                    issues_to_want_count += 1
+                            else:
+                                pred_action = 'Mark issue Wanted'
+                                issues_to_want_count += 1
             else:
                 res_state = 'Unknown / Unmatched Reference'
+                pred_action = 'Cannot resolve safely'
+                unresolved_count += 1
         else:
             res_state = 'Unknown / Unmatched Reference'
+            pred_action = 'Cannot resolve safely'
+            unresolved_count += 1
 
         reconciled.append({
             'order': idx,
@@ -198,6 +269,8 @@ def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None):
             'cv_series_id': cv_sid,
             'cv_issue_id': cv_iid,
             'resolution_state': res_state,
+            'predicted_action': pred_action,
+            'matched_status': iss_status,
             'matched_comic_id': mylar_sid,
             'matched_comic_name': mylar_sname,
             'matched_issue_id': mylar_iid,
@@ -205,23 +278,39 @@ def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None):
             'matched_location': mylar_loc
         })
 
+    summary = {
+        'total_entries': len(reconciled),
+        'series_to_add': len(unmonitored_series_ids),
+        'issues_to_want': issues_to_want_count,
+        'unchanged_entries': unchanged_count,
+        'archived_excluded': archived_excluded_count,
+        'unresolved_entries': unresolved_count,
+        'import_mode': import_mode,
+        'issuesonly': issuesonly,
+        'ignorearchived': ignorearchived
+    }
+
     return {
         'status': 'success',
         'manifest_title': manifest_title,
         'publisher': publisher,
         'books': books,
+        'summary': summary,
         'results': reconciled
     }
 
 
-def upload_cbl_manifest(raw_bytes, orig_filename, myDB=None):
+def upload_cbl_manifest(raw_bytes, orig_filename, myDB=None, import_mode='apply_library', issuesonly=None, ignorearchived=None):
     """
     Processes, stores in cbl_imports, and previews an uploaded CBL file.
-    
+
     :param raw_bytes: Uploaded byte stream
     :param orig_filename: Original filename from multipart header
     :param myDB: Optional DBConnection instance
-    :return: Dictionary containing status, upload_token, and preview results
+    :param import_mode: 'apply_library' or 'reading_list_only'
+    :param issuesonly: Overrides autowant_all when adding new volume
+    :param ignorearchived: Skips marking archived issues wanted
+    :return: Dictionary containing status, upload_token, summary, and preview results
     """
     if myDB is None:
         myDB = db.DBConnection()
@@ -246,7 +335,7 @@ def upload_cbl_manifest(raw_bytes, orig_filename, myDB=None):
     except Exception as e:
         return {'status': 'error', 'message': f'Failed to store uploaded file on server: {e}'}
 
-    recon_result = parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB)
+    recon_result = parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB, import_mode=import_mode, issuesonly=issuesonly, ignorearchived=ignorearchived)
     if recon_result.get('status') != 'success':
         return recon_result
 
@@ -265,16 +354,20 @@ def upload_cbl_manifest(raw_bytes, orig_filename, myDB=None):
         'total_issues': len(recon_result['results']),
         'is_already_imported': is_already_imported,
         'existing_arc_id': existing['StoryArcID'] if existing else None,
+        'summary': recon_result['summary'],
         'results': recon_result['results']
     }
 
 
-def preview_cbl_manifest(token, myDB=None):
+def preview_cbl_manifest(token, myDB=None, import_mode='apply_library', issuesonly=None, ignorearchived=None):
     """
     Reconciles and previews a reading list from a staged token or upload SHA-256 token.
-    
+
     :param token: Staged token name or 64-char hex SHA-256 token
     :param myDB: Optional DBConnection instance
+    :param import_mode: 'apply_library' or 'reading_list_only'
+    :param issuesonly: Overrides autowant_all when adding new volume
+    :param ignorearchived: Skips marking archived issues wanted
     :return: Preview reconciliation dictionary
     """
     if myDB is None:
@@ -295,7 +388,7 @@ def preview_cbl_manifest(token, myDB=None):
         if file_sha256.lower() != manifest['expected_sha256'].lower():
             return {'status': 'error', 'message': 'CBL file integrity check failed (SHA-256 mismatch)'}
 
-        recon_result = parse_and_reconcile_cbl(content, manifest['source_name'], myDB)
+        recon_result = parse_and_reconcile_cbl(content, manifest['source_name'], myDB, import_mode=import_mode, issuesonly=issuesonly, ignorearchived=ignorearchived)
         if recon_result.get('status') != 'success':
             return recon_result
 
@@ -308,6 +401,7 @@ def preview_cbl_manifest(token, myDB=None):
             'is_already_imported': bool(existing),
             'existing_arc_id': existing['StoryArcID'] if existing else None,
             'total_issues': len(recon_result['results']),
+            'summary': recon_result['summary'],
             'results': recon_result['results']
         }
 
@@ -322,7 +416,7 @@ def preview_cbl_manifest(token, myDB=None):
         if file_sha256.lower() != token.lower():
             return {'status': 'error', 'message': 'Stored file integrity check failed.'}
 
-        recon_result = parse_and_reconcile_cbl(content, f"cbl_{token[:12]}.cbl", myDB)
+        recon_result = parse_and_reconcile_cbl(content, f"cbl_{token[:12]}.cbl", myDB, import_mode=import_mode, issuesonly=issuesonly, ignorearchived=ignorearchived)
         if recon_result.get('status') != 'success':
             return recon_result
 
@@ -337,31 +431,115 @@ def preview_cbl_manifest(token, myDB=None):
             'is_already_imported': bool(existing),
             'existing_arc_id': existing['StoryArcID'] if existing else None,
             'total_issues': len(recon_result['results']),
+            'summary': recon_result['summary'],
             'results': recon_result['results']
         }
     else:
         return {'status': 'error', 'message': 'Invalid manifest token.'}
 
 
-def confirm_cbl_import(token, filename=None, myDB=None):
+def _apply_library_mutations(volume_index, monitored_want_ids, issuesonly=True, ignorearchived=False, myDB=None):
+    """
+    Applies Carbon-equivalent library mutations:
+    - Queues unmonitored series via importer.importer_thread with suppress_addall=(issuesonly and AUTOWANT_ALL)
+    - Queues new volume issue IDs to importer.issue_watcher_thread
+    - Updates monitored skipped/archived issues to 'Wanted' in the database and queues to issue_watcher_thread
+    - Saves user CBL import options to configuration
+    """
+    if myDB is None:
+        myDB = db.DBConnection()
+
+    # 1. Update monitored issues in DB directly so state is immediately truthful
+    if monitored_want_ids:
+        for iid in monitored_want_ids:
+            iss_row = myDB.selectone("SELECT IssueID, Status FROM issues WHERE IssueID=?", [iid]).fetchone()
+            if iss_row:
+                curr_status = iss_row['Status']
+                if curr_status in ('Downloaded', 'Wanted', 'Snatched', 'Failed'):
+                    logger.fdebug(f"[CBL_SERVICE] Issue {iid} is already {curr_status}; skipping mutation.")
+                    continue
+                if curr_status == 'Archived' and ignorearchived:
+                    logger.fdebug(f"[CBL_SERVICE] Issue {iid} is Archived and ignorearchived=True; skipping mutation.")
+                    continue
+                myDB.action("UPDATE issues SET Status='Wanted' WHERE IssueID=?", [iid])
+            else:
+                ann_row = myDB.selectone("SELECT IssueID, Status FROM annuals WHERE IssueID=? AND NOT Deleted", [iid]).fetchone()
+                if ann_row:
+                    curr_status = ann_row['Status']
+                    if curr_status in ('Downloaded', 'Wanted', 'Snatched', 'Failed'):
+                        logger.fdebug(f"[CBL_SERVICE] Annual {iid} is already {curr_status}; skipping mutation.")
+                        continue
+                    if curr_status == 'Archived' and ignorearchived:
+                        logger.fdebug(f"[CBL_SERVICE] Annual {iid} is Archived and ignorearchived=True; skipping mutation.")
+                        continue
+                    myDB.action("UPDATE annuals SET Status='Wanted' WHERE IssueID=?", [iid])
+
+        try:
+            from mylar import importer
+            importer.issue_watcher_thread(list(monitored_want_ids))
+        except Exception as e:
+            logger.warn(f"[CBL_SERVICE] Could not queue monitored issues to issue_watcher_thread: {e}")
+
+    # 2. Queue unmonitored volumes
+    if volume_index:
+        try:
+            from mylar import importer
+            autowant_all = getattr(mylar.CONFIG, 'AUTOWANT_ALL', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+            for comic_id, vdata in volume_index.items():
+                comic_request = [{
+                    "comicid": comic_id,
+                    "comicname": vdata.get('VolumeName'),
+                    "seriesyear": vdata.get('VolumeYear'),
+                    "suppress_addall": bool(issuesonly and autowant_all)
+                }]
+                importer.importer_thread(comic_request)
+                if vdata.get('IssueIDs'):
+                    importer.issue_watcher_thread(vdata['IssueIDs'])
+            importer.importer_thread([])  # Nudge mass-add thread
+        except Exception as e:
+            logger.warn(f"[CBL_SERVICE] Could not queue new volumes to importer_thread: {e}")
+
+    # 3. Update saved configuration values
+    if hasattr(mylar, 'CONFIG') and mylar.CONFIG:
+        try:
+            mylar.CONFIG.CBL_IMPORT_ISSUESONLY = issuesonly
+            mylar.CONFIG.CBL_IMPORT_IGNOREARCHIVED = ignorearchived
+            mylar.CONFIG.writeconfig(values={
+                'CBL_IMPORT_ISSUESONLY': issuesonly,
+                'CBL_IMPORT_IGNOREARCHIVED': ignorearchived
+            })
+        except Exception:
+            pass
+
+
+def confirm_cbl_import(token, filename=None, myDB=None, import_mode='apply_library', issuesonly=None, ignorearchived=None):
     """
     Performs an atomic, verified import of a CBL manifest into the database.
     - Validates file integrity before database write.
     - Persists manifest metadata in storyarc_manifests.
     - Inserts reading order rows in storyarcs.
     - Atomically rolls back both tables if any insertion fails.
-    - Never changes issue statuses or triggers provider searches.
-    
+    - When import_mode == 'apply_library', applies verified Carbon CBL library mutations.
+    - When import_mode == 'reading_list_only', performs zero library mutations.
+
     :param token: Staged token or upload SHA-256 token
     :param filename: Optional display filename
     :param myDB: Optional DBConnection instance
-    :return: Result dictionary with status and storyarcid
+    :param import_mode: 'apply_library' or 'reading_list_only'
+    :param issuesonly: Overrides autowant_all when adding new volume
+    :param ignorearchived: Skips marking archived issues wanted
+    :return: Result dictionary with status, storyarcid, summary, and message
     """
     if myDB is None:
         myDB = db.DBConnection()
 
     if not token:
         return {'status': 'error', 'message': 'No manifest token provided.'}
+
+    if issuesonly is None:
+        issuesonly = getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+    if ignorearchived is None:
+        ignorearchived = getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else False
 
     import_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -377,7 +555,7 @@ def confirm_cbl_import(token, filename=None, myDB=None):
         if file_sha256.lower() != manifest['expected_sha256'].lower():
             return {'status': 'error', 'message': 'CBL file integrity check failed (SHA-256 mismatch).'}
 
-        recon = parse_and_reconcile_cbl(content, manifest['source_name'], myDB)
+        recon = parse_and_reconcile_cbl(content, manifest['source_name'], myDB, import_mode=import_mode, issuesonly=issuesonly, ignorearchived=ignorearchived)
         if recon.get('status') != 'success':
             return recon
 
@@ -400,6 +578,7 @@ def confirm_cbl_import(token, filename=None, myDB=None):
         repo_path = manifest['repo_path']
         raw_path = filepath
         books = recon['books']
+        reconciled_items = recon['results']
 
     elif len(token) == 64 and all(c in '0123456789abcdefABCDEF' for c in token):
         filepath = os.path.join(mylar.DATA_DIR, 'cbl_imports', f"cbl_{token}.cbl")
@@ -412,7 +591,7 @@ def confirm_cbl_import(token, filename=None, myDB=None):
         if file_sha256.lower() != token.lower():
             return {'status': 'error', 'message': 'Integrity check failed: file hash mismatch.'}
 
-        recon = parse_and_reconcile_cbl(content, f"cbl_{token[:12]}.cbl", myDB)
+        recon = parse_and_reconcile_cbl(content, f"cbl_{token[:12]}.cbl", myDB, import_mode=import_mode, issuesonly=issuesonly, ignorearchived=ignorearchived)
         if recon.get('status') != 'success':
             return recon
 
@@ -435,8 +614,8 @@ def confirm_cbl_import(token, filename=None, myDB=None):
         repo_path = None
         raw_path = filepath
         books = recon['books']
+        reconciled_items = recon['results']
 
-        # Load companion metadata if available (e.g. from dieseltech catalog)
         meta_path = os.path.join(mylar.DATA_DIR, 'cbl_imports', f"cbl_{token}.json")
         if os.path.isfile(meta_path):
             try:
@@ -451,6 +630,38 @@ def confirm_cbl_import(token, filename=None, myDB=None):
                 logger.warn(f"[CBL_IMPORT] Failed to read companion metadata {meta_path}: {ex}")
     else:
         return {'status': 'error', 'message': 'Invalid or unapproved manifest token.'}
+
+    # Collect library mutations before committing DB transaction
+    volume_index = {}
+    monitored_want_ids = []
+
+    if import_mode == 'apply_library':
+        autowant_all = getattr(mylar.CONFIG, 'AUTOWANT_ALL', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+        for item in reconciled_items:
+            cv_sid = item.get('cv_series_id')
+            cv_iid = item.get('cv_issue_id')
+            act = item.get('predicted_action')
+            sname = item.get('series_name')
+            vyear = item.get('volume_year')
+
+            if act == 'Add series and mark issue Wanted' and cv_sid:
+                if cv_sid not in volume_index:
+                    issue_list = []
+                    if (issuesonly and autowant_all) or not autowant_all:
+                        if cv_iid:
+                            issue_list.append(cv_iid)
+                    volume_index[cv_sid] = {
+                        'NewVol': True,
+                        'VolumeName': sname,
+                        'VolumeYear': vyear,
+                        'IssueIDs': issue_list
+                    }
+                else:
+                    if (issuesonly and autowant_all) or not autowant_all:
+                        if cv_iid and cv_iid not in volume_index[cv_sid]['IssueIDs']:
+                            volume_index[cv_sid]['IssueIDs'].append(cv_iid)
+            elif act == 'Mark issue Wanted' and cv_iid:
+                monitored_want_ids.append(cv_iid)
 
     try:
         existing_id = myDB.selectone("SELECT StoryArcID FROM storyarc_manifests WHERE StoryArcID=?", [storyarc_id]).fetchone()
@@ -481,12 +692,17 @@ def confirm_cbl_import(token, filename=None, myDB=None):
             myDB.action("INSERT INTO storyarcs (StoryArcID, ComicName, IssueNumber, SeriesYear, IssueYEAR, StoryArc, TotalIssues, Status, IssueArcID, ReadingOrder, IssueID, ComicID, IssueName, Publisher, DateAdded, Type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         [storyarc_id, sname, inum, vyear, pyear, display_name, str(len(books)), 'Imported', issue_arc_id, idx, cv_iid, cv_sid, iss_name, publisher, import_time, 'cbl'])
 
-        logger.info(f"[CBL_IMPORT] Successfully imported '{display_name}' ({len(books)} issues) with SHA-256 {file_sha256}")
+        # Apply library mutations if apply_library mode selected
+        if import_mode == 'apply_library':
+            _apply_library_mutations(volume_index, monitored_want_ids, issuesonly=issuesonly, ignorearchived=ignorearchived, myDB=myDB)
+
+        logger.info(f"[CBL_IMPORT] Successfully imported '{display_name}' ({len(books)} issues) with SHA-256 {file_sha256} [Mode: {import_mode}]")
         return {
             'status': 'success',
             'message': f"Successfully imported '{display_name}' ({len(books)} issues)",
             'storyarcid': storyarc_id,
-            'storyarcname': display_name
+            'storyarcname': display_name,
+            'summary': recon['summary']
         }
     except Exception as e:
         logger.error(f"[CBL_IMPORT] Error during atomic import transaction: {e}")
@@ -498,12 +714,357 @@ def confirm_cbl_import(token, filename=None, myDB=None):
         return {'status': 'error', 'message': f'Failed to import Story Arc: {e}'}
 
 
+def reconcile_existing_storyarc(storyarc_id, myDB=None, import_mode='apply_library', issuesonly=None, ignorearchived=None, apply_changes=False):
+    """
+    Reconciles an already-imported Story Arc against the local library.
+    Allows previewing predictions or applying Carbon-equivalent library mutations.
+
+    :param storyarc_id: Story Arc ID string
+    :param myDB: Optional DBConnection instance
+    :param import_mode: 'apply_library' or 'reading_list_only'
+    :param issuesonly: Overrides autowant_all when adding new volume
+    :param ignorearchived: Skips marking archived issues wanted
+    :param apply_changes: If True, executes library mutations; if False, returns preview
+    :return: Dictionary containing status, summary, and per-entry reconciliation
+    """
+    if myDB is None:
+        myDB = db.DBConnection()
+
+    if not storyarc_id:
+        return {'status': 'error', 'message': 'No StoryArcID provided.'}
+
+    if issuesonly is None:
+        issuesonly = getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+    if ignorearchived is None:
+        ignorearchived = getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else False
+
+    arc_rows = myDB.select("SELECT * FROM storyarcs WHERE StoryArcID=? AND NOT Manual IS 'deleted' ORDER BY ReadingOrder ASC", [storyarc_id])
+    if not arc_rows:
+        return {'status': 'error', 'message': f'Story Arc not found: {storyarc_id}'}
+
+    manifest = myDB.selectone("SELECT * FROM storyarc_manifests WHERE StoryArcID=?", [storyarc_id]).fetchone()
+    arc_name = manifest['StoryArcName'] if manifest else (arc_rows[0]['StoryArc'] if arc_rows else storyarc_id)
+
+    reconciled = []
+    volume_index = {}
+    monitored_want_ids = []
+    unmonitored_series_ids = set()
+    issues_to_want_count = 0
+    unchanged_count = 0
+    archived_excluded_count = 0
+    unresolved_count = 0
+
+    autowant_all = getattr(mylar.CONFIG, 'AUTOWANT_ALL', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+
+    for row in arc_rows:
+        cv_sid = row['ComicID']
+        cv_iid = row['IssueID']
+        sname = row['ComicName'] or ''
+        vyear = row['SeriesYear'] or ''
+        inum = row['IssueNumber'] or ''
+        order = row['ReadingOrder']
+        issue_arc_id = row['IssueArcID'] or f"{storyarc_id}_{order}"
+
+        res_state = 'Unknown / Unmatched Reference'
+        pred_action = 'Cannot resolve safely'
+        mylar_sid = None
+        mylar_sname = None
+        mylar_iid = None
+        mylar_ititle = None
+        mylar_loc = None
+        iss_status = None
+
+        if cv_sid and cv_iid:
+            try:
+                int(cv_sid)
+                int(cv_iid)
+                valid_cv = True
+            except (ValueError, TypeError):
+                valid_cv = False
+
+            if valid_cv:
+                comic = myDB.selectone("SELECT ComicID, ComicName, ComicYear, Status FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
+                if not comic:
+                    res_state = 'Unmonitored Series'
+                    if import_mode == 'apply_library':
+                        pred_action = 'Add series and mark issue Wanted'
+                        unmonitored_series_ids.add(cv_sid)
+                        issues_to_want_count += 1
+                        if cv_sid not in volume_index:
+                            issue_list = []
+                            if (issuesonly and autowant_all) or not autowant_all:
+                                issue_list.append(cv_iid)
+                            volume_index[cv_sid] = {
+                                'NewVol': True,
+                                'VolumeName': sname,
+                                'VolumeYear': vyear,
+                                'IssueIDs': issue_list
+                            }
+                        else:
+                            if (issuesonly and autowant_all) or not autowant_all:
+                                if cv_iid not in volume_index[cv_sid]['IssueIDs']:
+                                    volume_index[cv_sid]['IssueIDs'].append(cv_iid)
+                    else:
+                        pred_action = 'Reading-list entry only'
+                        unchanged_count += 1
+                else:
+                    mylar_sid = comic['ComicID']
+                    mylar_sname = comic['ComicName']
+                    iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
+                    if not iss:
+                        iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+
+                    if not iss:
+                        res_state = 'Unknown / Unmatched Reference'
+                        pred_action = 'Cannot resolve safely'
+                        unresolved_count += 1
+                    else:
+                        mylar_iid = iss['IssueID']
+                        mylar_ititle = iss['IssueName']
+                        iss_status = iss['Status']
+
+                        if iss['Status'] == 'Downloaded' and iss['Location'] and iss['Location'] != 'None':
+                            res_state = 'Downloaded'
+                            mylar_loc = iss['Location']
+                        else:
+                            res_state = 'Missing (Monitored)'
+
+                        if import_mode == 'reading_list_only':
+                            pred_action = 'Reading-list entry only'
+                            unchanged_count += 1
+                        else:
+                            if iss_status == 'Downloaded':
+                                pred_action = 'No action needed — Downloaded'
+                                unchanged_count += 1
+                            elif iss_status == 'Wanted':
+                                pred_action = 'No action needed — Already Wanted'
+                                unchanged_count += 1
+                            elif iss_status == 'Snatched':
+                                pred_action = 'No action needed — Snatched'
+                                unchanged_count += 1
+                            elif iss_status == 'Failed':
+                                pred_action = 'No action needed'
+                                unchanged_count += 1
+                            elif iss_status == 'Archived':
+                                if ignorearchived:
+                                    pred_action = 'Skipped because Archived'
+                                    archived_excluded_count += 1
+                                    unchanged_count += 1
+                                else:
+                                    pred_action = 'Mark issue Wanted'
+                                    issues_to_want_count += 1
+                                    monitored_want_ids.append(cv_iid)
+                            else:
+                                pred_action = 'Mark issue Wanted'
+                                issues_to_want_count += 1
+                                monitored_want_ids.append(cv_iid)
+            else:
+                res_state = 'Unknown / Unmatched Reference'
+                pred_action = 'Cannot resolve safely'
+                unresolved_count += 1
+        else:
+            res_state = 'Unknown / Unmatched Reference'
+            pred_action = 'Cannot resolve safely'
+            unresolved_count += 1
+
+        reconciled.append({
+            'order': order,
+            'issue_arc_id': issue_arc_id,
+            'series_name': sname,
+            'volume_year': vyear,
+            'issue_number': inum,
+            'cv_series_id': cv_sid,
+            'cv_issue_id': cv_iid,
+            'resolution_state': res_state,
+            'predicted_action': pred_action,
+            'matched_status': iss_status,
+            'matched_comic_id': mylar_sid,
+            'matched_comic_name': mylar_sname,
+            'matched_issue_id': mylar_iid,
+            'matched_issue_title': mylar_ititle,
+            'matched_location': mylar_loc
+        })
+
+    summary = {
+        'total_entries': len(reconciled),
+        'series_to_add': len(unmonitored_series_ids),
+        'issues_to_want': issues_to_want_count,
+        'unchanged_entries': unchanged_count,
+        'archived_excluded': archived_excluded_count,
+        'unresolved_entries': unresolved_count,
+        'import_mode': import_mode,
+        'issuesonly': issuesonly,
+        'ignorearchived': ignorearchived
+    }
+
+    if apply_changes:
+        # Also backfill issue title in storyarcs if newly available
+        for item in reconciled:
+            if item.get('matched_issue_title') and item.get('cv_issue_id'):
+                try:
+                    myDB.action("UPDATE storyarcs SET IssueName=? WHERE StoryArcID=? AND IssueID=?",
+                                [item['matched_issue_title'], storyarc_id, item['cv_issue_id']])
+                except Exception:
+                    pass
+
+        if import_mode == 'apply_library':
+            _apply_library_mutations(volume_index, monitored_want_ids, issuesonly=issuesonly, ignorearchived=ignorearchived, myDB=myDB)
+
+        return {
+            'status': 'success',
+            'message': f"Story Arc '{arc_name}' successfully reconciled with library.",
+            'storyarcid': storyarc_id,
+            'storyarcname': arc_name,
+            'summary': summary,
+            'results': reconciled
+        }
+    else:
+        return {
+            'status': 'success',
+            'storyarcid': storyarc_id,
+            'storyarcname': arc_name,
+            'summary': summary,
+            'results': reconciled
+        }
+
+
+def execute_entry_action(storyarc_id, issue_arc_id, action, issuesonly=None, ignorearchived=None, myDB=None):
+    """
+    Executes a granular per-entry action on a Story Arc entry.
+
+    Supported Actions:
+    - 'add_series': Queues unmonitored series for addition and its issue for watch.
+    - 'mark_wanted': Marks a monitored skipped/archived issue as Wanted.
+    - 'retry_resolution': Re-evaluates database resolution for the entry.
+
+    :param storyarc_id: Story Arc ID string
+    :param issue_arc_id: Issue Arc ID string or IssueID
+    :param action: Action name string
+    :param issuesonly: Overrides autowant_all
+    :param ignorearchived: Skips archived issues
+    :param myDB: Optional DBConnection instance
+    :return: Action result dictionary
+    """
+    if myDB is None:
+        myDB = db.DBConnection()
+
+    if not storyarc_id or not issue_arc_id or not action:
+        return {'status': 'error', 'message': 'Missing required parameters.'}
+
+    if issuesonly is None:
+        issuesonly = getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
+
+    row = myDB.selectone("SELECT * FROM storyarcs WHERE StoryArcID=? AND (IssueArcID=? OR IssueID=?)",
+                         [storyarc_id, issue_arc_id, issue_arc_id]).fetchone()
+    if not row:
+        return {'status': 'error', 'message': 'Story Arc entry not found.'}
+
+    cv_sid = row['ComicID']
+    cv_iid = row['IssueID']
+    sname = row['ComicName'] or 'Series'
+    vyear = row['SeriesYear'] or ''
+    inum = row['IssueNumber'] or ''
+
+    if action == 'add_series':
+        if not cv_sid:
+            return {'status': 'error', 'message': 'Missing ComicVine Series ID for entry.'}
+
+        comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
+        if comic:
+            return {'status': 'info', 'message': f"Series '{sname}' is already monitored."}
+
+        volume_index = {
+            cv_sid: {
+                'NewVol': True,
+                'VolumeName': sname,
+                'VolumeYear': vyear,
+                'IssueIDs': [cv_iid] if cv_iid else []
+            }
+        }
+        _apply_library_mutations(volume_index, [], issuesonly=issuesonly, myDB=myDB)
+        return {
+            'status': 'success',
+            'message': f"Queued series '{sname} ({vyear})' for addition and Issue #{inum} for download."
+        }
+
+    elif action == 'mark_wanted':
+        if not cv_iid:
+            return {'status': 'error', 'message': 'Missing ComicVine Issue ID for entry.'}
+
+        iss = myDB.selectone("SELECT IssueID, IssueName, Status FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
+        is_annual = False
+        if not iss:
+            iss = myDB.selectone("SELECT IssueID, IssueName, Status FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+            is_annual = True
+
+        if not iss:
+            return {'status': 'error', 'message': f"Issue #{inum} is not monitored in library yet. Add series first."}
+
+        if iss['Status'] in ('Downloaded', 'Wanted', 'Snatched'):
+            return {'status': 'info', 'message': f"Issue #{inum} is already in state '{iss['Status']}'."}
+
+        if is_annual:
+            myDB.action("UPDATE annuals SET Status='Wanted' WHERE IssueID=?", [cv_iid])
+        else:
+            myDB.action("UPDATE issues SET Status='Wanted' WHERE IssueID=?", [cv_iid])
+
+        try:
+            from mylar import importer
+            importer.issue_watcher_thread([cv_iid])
+        except Exception:
+            pass
+
+        return {
+            'status': 'success',
+            'message': f"Marked {sname} #{inum} as Wanted."
+        }
+
+    elif action == 'retry_resolution':
+        if not cv_sid or not cv_iid:
+            return {'status': 'error', 'message': 'Entry lacks required ComicVine identifiers.'}
+
+        comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
+        if not comic:
+            return {
+                'status': 'success',
+                'resolution_state': 'Unmonitored Series',
+                'message': f"Series '{sname}' is unmonitored."
+            }
+
+        iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
+        if not iss:
+            iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+
+        if not iss:
+            return {
+                'status': 'success',
+                'resolution_state': 'Unknown / Unmatched Reference',
+                'message': f"Series monitored, but issue {cv_iid} not yet indexed."
+            }
+
+        res_state = 'Downloaded' if (iss['Status'] == 'Downloaded' and iss['Location'] and iss['Location'] != 'None') else 'Missing (Monitored)'
+        if iss['IssueName']:
+            try:
+                myDB.action("UPDATE storyarcs SET IssueName=? WHERE StoryArcID=? AND IssueID=?", [iss['IssueName'], storyarc_id, cv_iid])
+            except Exception:
+                pass
+
+        return {
+            'status': 'success',
+            'resolution_state': res_state,
+            'message': f"Resolved as '{res_state}' (Issue status: {iss['Status']})."
+        }
+
+    else:
+        return {'status': 'error', 'message': f'Unknown entry action: {action}'}
+
+
 def delete_cbl_arc(storyarcid, myDB=None):
     """
     Safely removes a Story Arc and prunes unreferenced raw CBL files.
     - Removes manifest and reading order records from database.
     - Only deletes the stored raw .cbl file if no remaining manifest references the same SHA-256.
-    
+
     :param storyarcid: Story Arc ID string
     :param myDB: Optional DBConnection instance
     :return: Dictionary with deletion status

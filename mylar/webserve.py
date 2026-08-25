@@ -274,7 +274,7 @@ class WebInterface(object):
                 #    c_status = 'success'
 
         # Perform checks for a valid unrar (more important now this is a pre-requisite for CRC checks)
-        
+
         if mylar.REQS['rar']['rar_failure']:
             if 'windows' in mylar.OS_DETECT.lower():
                 rartool = 'unrar/WinRAR'
@@ -339,13 +339,13 @@ class WebInterface(object):
     def loadhome(self, **kwargs):
         iDisplayStart = int(kwargs['start'])
         iDisplayLength = int(kwargs['length'])
-        
+
         if not 'selected' in kwargs.keys() or kwargs['selected'] == 'All':
             resultlist = helpers.havetotals()
         else:
             resultlist = helpers.havetotals(start_char_filter=kwargs['selected'])
 
-        sSearch = kwargs['search[value]']        
+        sSearch = kwargs['search[value]']
         filtered = []
 
         if sSearch == "" or sSearch == None:
@@ -399,14 +399,14 @@ class WebInterface(object):
 
         # Multisort by using the stable nature of sort in reverse order
         # We have to work out the number of columns based on kwargs keys
-        sort_columns = 0        
+        sort_columns = 0
         while f"order[{sort_columns}][column]" in kwargs.keys():
             sort_columns += 1
 
         for sort_pos in range(sort_columns, 0, -1):
             iSortCol = kwargs[f'order[{sort_pos-1}][column]']
             sSortDir = kwargs[f'order[{sort_pos-1}][dir]']
-        
+
             if iSortCol == '0':
                 sortcolumn = 'ComicPublisher'
             elif iSortCol == '1':
@@ -442,7 +442,7 @@ class WebInterface(object):
         else:
             rows = filtered
         rows = [[row['ComicPublisher'], row['ComicName'], row['ComicYear'], row['LatestIssue'], row['LatestDate'], row['recentstatus'], row['Status'], row['percent'], row['haveissues'], row['totalissues'], row['ComicID'], row['displaytype'], row['ComicVolume'], row['cv_removed'], helpers.validate_cache_cover_path(row.get('ComicImage'))] for row in rows]
-        
+
         return json.dumps({
             'recordsFiltered': len(filtered),
             'recordsTotal': len(resultlist),
@@ -4844,6 +4844,16 @@ class WebInterface(object):
         return handle_cbl_confirm_import(token=token, **kwargs)
     cbl_confirm_import.exposed = True
 
+    def cbl_reconcile_arc(self, storyarcid=None, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_reconcile_arc
+        return handle_cbl_reconcile_arc(storyarcid=storyarcid, **kwargs)
+    cbl_reconcile_arc.exposed = True
+
+    def cbl_entry_action(self, storyarcid=None, issue_arc_id=None, action=None, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_cbl_entry_action
+        return handle_cbl_entry_action(storyarcid=storyarcid, issue_arc_id=issue_arc_id, action=action, **kwargs)
+    cbl_entry_action.exposed = True
+
     def cbl_delete_arc(self, storyarcid=None, **kwargs):
         from mylar.extensions.storyarcs.controller import handle_cbl_delete_arc
         return handle_cbl_delete_arc(storyarcid=storyarcid, **kwargs)
@@ -4868,6 +4878,11 @@ class WebInterface(object):
         from mylar.extensions.storyarcs.controller import handle_cbl_catalog_preview
         return handle_cbl_catalog_preview(entry_id=entry_id, **kwargs)
     cbl_catalog_preview.exposed = True
+
+    def cbl_csrf_token(self, **kwargs):
+        from mylar.extensions.storyarcs.controller import handle_get_cbl_csrf_token
+        return handle_get_cbl_csrf_token(**kwargs)
+    cbl_csrf_token.exposed = True
 
     def storyarc_main(self, arcid=None, **kwargs):
         from mylar.extensions.storyarcs.controller import handle_storyarc_main
@@ -5488,7 +5503,7 @@ class WebInterface(object):
                             if temploc:
                                 temploc = temploc.replace('_', ' ')
                             else:
-                                logger.debug('could not parse issue number: %r', tmpfc)                                
+                                logger.debug('could not parse issue number: %r', tmpfc)
                             fcdigit = helpers.issue_number_parser(arc['IssueNumber']).asInt
                             int_iss = helpers.issue_number_parser(temploc).asInt
                             if int_iss == fcdigit:
@@ -8337,10 +8352,10 @@ class WebInterface(object):
                      'ComicVersion': cinfo['ComicVersion'],
                      'AgeRating': cinfo['AgeRating'],
                      'meta_dir': cinfo['ComicLocation']}
-        
+
         if not isinstance(IssueIDs, list):
             IssueIDs = [IssueIDs]
-        
+
         issueList = ', '.join(IssueIDs)
         groupinfo = myDB.select(f'SELECT IssueID, Location FROM issues WHERE ComicID={ComicID} and IssueID IN ({issueList}) and Location is not NULL')
         if mylar.CONFIG.ANNUALS_ON:
@@ -8349,24 +8364,24 @@ class WebInterface(object):
         if len(groupinfo) == 0:
             logger.warn('No issues physically exist for me to (re)-tag.')
             return
-        
+
         if mylar.CONFIG.CV_BATCH_LIMIT_PROTECTION and len(groupinfo) > mylar.CONFIG.CV_BATCH_LIMIT_THRESHOLD:
             warningMessage = f"CV Batch Limit Protection ({mylar.CONFIG.CV_BATCH_LIMIT_THRESHOLD}) has been triggered trying to tag {len(groupinfo)} issues.  This will likely breach ComicVine API Limits."
             logger.warn(f"[SERIES-METATAGGER][{comicinfo['ComicName']} ({comicinfo['ComicYear']})] {warningMessage}")
             mylar.GLOBAL_MESSAGES = {'status': 'failure', 'comicname': cinfo['ComicName'], 'seriesyear': cinfo['ComicYear'], 'comicid': ComicID, 'tables': 'both', 'message': warningMessage}
             return
-        
+
         issueinfo = []
         for ginfo in groupinfo:
             issueinfo.append({'IssueID': ginfo['IssueID'],
-                              'Location': ginfo['Location']})        
+                              'Location': ginfo['Location']})
 
         if threaded is False:
             threading.Thread(target=self.thread_that_bulk_meta, args=[comicinfo, issueinfo]).start()
             return json.dumps({'status': 'success'})
         else:
             self.thread_that_bulk_meta(comicinfo, issueinfo)
-            return json.dumps({'status': 'success'})        
+            return json.dumps({'status': 'success'})
     bulk_metatag.exposed = True
 
     def thread_that_bulk_meta(self, comicinfo, issueinfo):
@@ -9846,8 +9861,8 @@ class WebInterface(object):
             cblXML = ET.parse(cblFile.file)
             cblRoot = cblXML.getroot()
         except ET.ParseError as e:
-            return json.dumps({'status': 'error', 'message' : f'XML Parsing Error: {e}'})            
-        
+            return json.dumps({'status': 'error', 'message' : f'XML Parsing Error: {e}'})
+
         # Formdata only sends strings ...
         ignorearchived = True if ignorearchived == 'true' else False
         issuesonly = True if issuesonly == 'true' else False
@@ -9866,13 +9881,13 @@ class WebInterface(object):
             for book in books:
                 databaseEntry = book.find(".//Database[@Name='cv']")
                 if databaseEntry is None:
-                    return json.dumps({'status': 'error', 'message' : f'CBL Processing Error: No CV identifiers for entry {books.index(book)}'})            
+                    return json.dumps({'status': 'error', 'message' : f'CBL Processing Error: No CV identifiers for entry {books.index(book)}'})
 
             myDB = db.DBConnection()
 
             for book in books:
                 databaseEntry = book.find(".//Database[@Name='cv']")
-                
+
                 issueIndex = books.index(book)
                 volumeName = book.get('Series')
                 volumeYear = book.get('Volume')
@@ -9888,7 +9903,7 @@ class WebInterface(object):
                     volume_cache[cvSeriesID] = vol_exists
                     if not vol_exists:
                         newvol_count += 1
-                
+
                 if vol_exists:
                     issue = myDB.selectone('SELECT * FROM issues WHERE IssueID=?', [cvIssueID]).fetchone()
 
@@ -9900,12 +9915,12 @@ class WebInterface(object):
 
                     if iss_exists:
                         iss_status = issue['Status']
-                        
+
                         if iss_status in ['Downloaded', 'Wanted', 'Snatched', 'Failed']:
                             action_text = 'No action needed'
                         elif iss_status == 'Archived':
                             if ignorearchived :
-                                action_text = 'No action needed' 
+                                action_text = 'No action needed'
                             else:
                                 action_text = "Mark issue as Wanted"
                                 missing_issue_count += 1
@@ -9921,9 +9936,9 @@ class WebInterface(object):
                     iss_status = 'Missing'
                     missing_issue_count += 1
                     action_text = 'Add volume & mark issue as Wanted'
-                
+
                 # List to return to import table display: Entry, Volume, Issue, Status, Action
-                results.append([issueIndex, 
+                results.append([issueIndex,
                                 f'<a href="{"comicDetails?ComicID=" if vol_exists else "https://comicvine.com/volume/4050-"}{cvSeriesID}" target="{"_self" if vol_exists else "_blank"}">{volumeName} ({volumeYear})</a>',
                                 issueNumber,
                                 iss_status,
@@ -9931,7 +9946,7 @@ class WebInterface(object):
 
         except Exception as e:
             return json.dumps({'status': 'error', 'message' : f'Error processing CBL file.  Unhandled Exception: {str(e)}'})
-        
+
         if newvol_count > 200:
             warnings.add('Attempting to add more than 200 series may cause problems due to CV API limits.  Consider breaking up this list into smaller parts.')
         elif newvol_count > 100:
@@ -9945,12 +9960,12 @@ class WebInterface(object):
         return json.dumps({'status': 'success', 'warning_text' : warning_text, 'missing_volumes' : newvol_count, 'missing_issues' : missing_issue_count, 'results' : results,
                            'message' : f'''CBL File "{cblFile.filename}" read successfully <br >
                            <br >
-                           Total Volumes: {len(volume_cache.keys())} <br >                           
+                           Total Volumes: {len(volume_cache.keys())} <br >
                            Missing Volumes: {newvol_count} <br >
                            <br >
                            Total Issues: {len(results)} <br >
                            Issues Not Currently Wanted: {missing_issue_count} <br >'''})
-    
+
     checkCBLFile.exposed = True
 
     # Assume this has been validated by check function
@@ -9972,18 +9987,18 @@ class WebInterface(object):
             cblRoot = cblXML.getroot()
         except ET.ParseError as e:
             return json.dumps({'status': 'error', 'message' : f'XML Parsing Error: {e}', 'warning_text' : warning_text})
-            
+
         try:
             books = cblRoot.findall(".//Book")
-            
+
             myDB = db.DBConnection()
-            
+
             # Process the CBL File and build a dictionary of Wanted Issue IDs keyed on the ComicID
             for book in books:
                 databaseEntry = book.find(".//Database[@Name='cv']")
                 if databaseEntry is None:
-                    return json.dumps({'status': 'error', 'message' : f'CBL Processing Error: No CV identifiers for entry {books.index(book)}', 'warning_text' : warning_text})            
-                
+                    return json.dumps({'status': 'error', 'message' : f'CBL Processing Error: No CV identifiers for entry {books.index(book)}', 'warning_text' : warning_text})
+
                 volumeName = book.get('Series')
                 volumeYear = book.get('Volume')
                 issueNumber = book.get('Number')
@@ -10005,19 +10020,19 @@ class WebInterface(object):
                     volume = myDB.selectone('SELECT * FROM comics WHERE ComicID=?', [cvSeriesID]).fetchone()
                     if volume is None:
                         logger.fdebug(f'CBL File: Volume "{volumeName} ({volumeYear})" does not exist exist.  Adding Volume, and Issue #{issueNumber} to be marked as Wanted')
-                        
+
                         issueList = []
                         # If Auto Want is on and not suppressed, we can avoid queueing this for addition
                         if (issuesonly and mylar.CONFIG.AUTOWANT_ALL) or not mylar.CONFIG.AUTOWANT_ALL:
                             issueList.append(cvIssueID)
-                        
+
                         volume_index[cvSeriesID] = {'NewVol' : True, 'VolumeName' : volumeName, 'VolumeYear' : volumeYear, 'IssueIDs' : issueList}
                         counters['volumes_added'] += 1
                         counters['issues_to_be_watched'] += 1
                     else:
                         volume_index[cvSeriesID] = {'NewVol' : False, 'VolumeName' : volumeName, 'VolumeYear' : volumeYear, 'IssueIDs' : []}
                         checkIssue = True
-                    
+
                 if checkIssue:
                     issue = myDB.selectone('SELECT * FROM issues WHERE IssueID=?', [cvIssueID]).fetchone()
 
@@ -10041,7 +10056,7 @@ class WebInterface(object):
                                 wantissue = True
                         else:
                             wantissue = True
-                        
+
                         if wantissue:
                             logger.fdebug(f'CBL File: Volume "{volumeName} ({volumeYear})" already exists, Issue #{issueNumber} to be marked as Wanted')
                             counters['issues_watched'] += 1
@@ -10073,10 +10088,10 @@ class WebInterface(object):
         warning_text = '<br >'.join(warnings)
         return json.dumps({'status': 'success', 'message' : f'''CBL File "{cblFile.filename}" fully imported <br >
                            <br >
-                           Issues Already Watched: {counters['issues_skipped']} <br > 
+                           Issues Already Watched: {counters['issues_skipped']} <br >
                            Existing Volume Issues to Watch: {counters['issues_watched']} <br >
                            New Volumes Queued to Add: {counters['volumes_added']} <br >
-                           New Volume Issues to Watch: {counters['issues_to_be_watched']} <br > ''', 
+                           New Volume Issues to Watch: {counters['issues_to_be_watched']} <br > ''',
                            'warning_text' : warning_text})
 
     processCBLFile.exposed = True

@@ -25,6 +25,21 @@
     var searchTimer = null;
     var isRefreshingCatalog = false;
 
+    function getCsrfToken() {
+        return $('#cbl_csrf_token').val() || $('meta[name="csrf-token"]').attr('content') || '';
+    }
+
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (settings.type === 'POST' || settings.type === 'PUT' || settings.type === 'DELETE') {
+                var token = getCsrfToken();
+                if (token) {
+                    xhr.setRequestHeader('X-CSRF-Token', token);
+                }
+            }
+        }
+    });
+
     function initConfig() {
         var cfgEl = document.getElementById('storyarc-page-config');
         if (cfgEl) {
@@ -106,12 +121,18 @@
     function handleFileSelected(files) {
         if (!files || files.length === 0) return;
         var file = files[0];
+        var opts = getImportOptions();
         var formData = new FormData();
         formData.append('cbl_file', file);
+        formData.append('import_mode', opts.import_mode);
+        formData.append('issuesonly', opts.issuesonly);
+        formData.append('ignorearchived', opts.ignorearchived);
 
         $('#dropzoneText').html('Uploading & validating <strong>' + file.name + '</strong>...');
         $('#modalAlertBox').hide();
         $('#previewResultsContainer').hide();
+        $('#cblImportOptionsContainer').hide();
+        $('#reconSummaryContainer').hide();
         $('#confirmImportBtn').hide();
 
         $.ajax({
@@ -149,6 +170,50 @@
         });
     }
 
+    function getImportOptions() {
+        var mode = $('input[name="cblImportMode"]:checked').val() || 'apply_library';
+        var issuesOnly = $('#cblIssuesOnly').is(':checked');
+        var ignoreArchived = $('#cblIgnoreArchived').is(':checked');
+        return {
+            import_mode: mode,
+            issuesonly: issuesOnly ? 'true' : 'false',
+            ignorearchived: ignoreArchived ? 'true' : 'false'
+        };
+    }
+
+    function selectImportMode(mode) {
+        if (mode === 'apply_library') {
+            $('#importModeApply').prop('checked', true);
+            $('#modeCardApply').addClass('active');
+            $('#modeCardReadingList').removeClass('active');
+            $('#applyLibraryOptionsGroup').slideDown(120);
+        } else {
+            $('#importModeReadingList').prop('checked', true);
+            $('#modeCardReadingList').addClass('active');
+            $('#modeCardApply').removeClass('active');
+            $('#applyLibraryOptionsGroup').slideUp(120);
+        }
+        handleImportOptionChange();
+    }
+
+    function handleImportOptionChange() {
+        if (!currentToken) return;
+        var opts = getImportOptions();
+        opts.token = currentToken;
+
+        $.ajax({
+            url: 'cbl_preview',
+            type: 'GET',
+            data: opts,
+            dataType: 'json',
+            success: function(resp) {
+                if (resp.status === 'success') {
+                    renderPreviewResults(resp);
+                }
+            }
+        });
+    }
+
     function fetchCblPreview() {
         var token = $('#manifestTokenSelect').val();
         if (!token) return;
@@ -156,11 +221,16 @@
         $('#fetchPreviewBtn').prop('disabled', true).text('Validating...');
         $('#modalAlertBox').hide();
         $('#previewResultsContainer').hide();
+        $('#cblImportOptionsContainer').hide();
+        $('#reconSummaryContainer').hide();
+
+        var params = getImportOptions();
+        params.token = token;
 
         $.ajax({
             url: 'cbl_preview',
             type: 'GET',
-            data: { token: token },
+            data: params,
             dataType: 'json',
             success: function(resp) {
                 $('#fetchPreviewBtn').prop('disabled', false).text('Validate & Preview');
@@ -186,9 +256,35 @@
         });
     }
 
+    function getPredictedActionBadgeClass(action) {
+        if (!action) return 'badge-status-unmatched';
+        if (action.indexOf('Downloaded') !== -1) return 'badge-status-downloaded';
+        if (action.indexOf('Already Wanted') !== -1) return 'badge-status-wanted';
+        if (action.indexOf('Snatched') !== -1) return 'badge-status-snatched';
+        if (action.indexOf('Add series') !== -1) return 'badge-status-addseries';
+        if (action.indexOf('Mark issue Wanted') !== -1) return 'badge-status-markwanted';
+        if (action.indexOf('Archived') !== -1) return 'badge-status-archived';
+        if (action.indexOf('Reading-list') !== -1) return 'badge-status-readinglist';
+        if (action.indexOf('Cannot resolve') !== -1) return 'badge-status-unmatched';
+        return 'badge-status-monitored';
+    }
+
     function renderPreviewResults(resp) {
         var rowsHtml = '';
-        var unmatchedCount = 0;
+        var summary = resp.summary || {};
+
+        $('#summaryTotalEntries').text(summary.total_entries || resp.total_issues || (resp.results ? resp.results.length : 0));
+        $('#summarySeriesToAdd').text(summary.series_to_add || 0);
+        $('#summaryIssuesToWant').text(summary.issues_to_want || 0);
+        $('#summaryUnchanged').text(summary.unchanged_entries || 0);
+        $('#summaryArchivedExcluded').text(summary.archived_excluded || 0);
+        $('#summaryUnresolved').text(summary.unresolved_entries || 0);
+
+        $('#cblImportOptionsContainer').show();
+        $('#reconSummaryContainer').show();
+
+        var unresolvedCount = summary.unresolved_entries || 0;
+
         resp.results.forEach(function(item) {
             var statusClass = 'badge-status-unmatched';
             var rstate = item.resolution_state;
@@ -197,8 +293,10 @@
             else if (rstate.indexOf('Unmonitored') !== -1) statusClass = 'badge-status-unmonitored';
             else if (rstate.indexOf('Unknown') !== -1 || rstate.indexOf('Unmatched') !== -1) {
                 statusClass = 'badge-status-unmatched';
-                unmatchedCount++;
             }
+
+            var predAction = item.predicted_action || 'No action needed';
+            var predClass = getPredictedActionBadgeClass(predAction);
 
             var cvDisplay = '—';
             if (item.cv_series_id && item.cv_issue_id) {
@@ -211,10 +309,13 @@
                 '<td>#' + (item.issue_number || '—') + '</td>' +
                 '<td><code style="font-size:10px;">' + cvDisplay + '</code></td>' +
                 '<td><span class="badge-status ' + statusClass + '">' + item.resolution_state + '</span></td>' +
+                '<td><span class="badge-status ' + predClass + '">' + predAction + '</span></td>' +
             '</tr>';
         });
         $('#previewTableBody').html(rowsHtml);
         $('#previewResultsContainer').show();
+
+        var mode = summary.import_mode || $('input[name="cblImportMode"]:checked').val() || 'apply_library';
 
         if (resp.is_already_imported) {
             $('#modalAlertBox')
@@ -223,12 +324,25 @@
                 .html('<strong>Notice:</strong> This reading list is already imported on your watchlist. <a href="detailStoryArc?StoryArcID=' + resp.existing_arc_id + '" style="color:#60a5fa; text-decoration:underline;">View Story Arc</a>')
                 .show();
             $('#confirmImportBtn').hide();
-        } else if (unmatchedCount > 0) {
-            var totalCount = resp.total_issues;
-            var entryText = (unmatchedCount === 1)
-                ? '1 of ' + totalCount + ' entries is unresolved and will be imported as an Unknown / Unmatched Reference.'
-                : unmatchedCount + ' of ' + totalCount + ' entries are unresolved and will be imported as Unknown / Unmatched References.';
-            var alertHtml = '<strong>Manifest is structurally valid.</strong> ' + entryText + ' No issue statuses will be modified.';
+        } else if (mode === 'reading_list_only') {
+            $('#modalAlertBox')
+                .removeClass('modal-alert-error modal-alert-warning')
+                .addClass('modal-alert-info')
+                .html('<strong>Reading List Only Mode:</strong> Manifest will be recorded for reference and tracking. No series will be added, and no issue statuses will be modified.')
+                .show();
+            $('#confirmImportBtn')
+                .show()
+                .prop('disabled', false)
+                .text('Confirm Reading List Only');
+        } else if (unresolvedCount > 0) {
+            var totalCount = resp.total_issues || (resp.results ? resp.results.length : 0);
+            var entryText = (unresolvedCount === 1)
+                ? '1 unresolved entry will be imported as an Unknown Reference.'
+                : unresolvedCount + ' unresolved entries will be imported as Unknown References.';
+            var alertHtml = '<strong>Library Action Preview:</strong> ' +
+                (summary.series_to_add ? '<strong>' + summary.series_to_add + '</strong> series to add, ' : '') +
+                '<strong>' + (summary.issues_to_want || 0) + '</strong> issues will be marked Wanted. ' +
+                entryText;
 
             $('#modalAlertBox')
                 .removeClass('modal-alert-error modal-alert-info modal-alert-success')
@@ -236,16 +350,14 @@
                 .html(alertHtml)
                 .show();
 
-            var btnText = (unmatchedCount === 1)
-                ? 'Confirm Import with 1 Unmatched Reference'
-                : 'Confirm Import with ' + unmatchedCount + ' Unmatched References';
-
             $('#confirmImportBtn')
                 .show()
                 .prop('disabled', false)
-                .text(btnText);
+                .text('Confirm & Apply to Library (' + unresolvedCount + ' Unmatched)');
         } else {
-            var alertHtml = '<strong>Manifest is structurally valid.</strong> All ' + resp.total_issues + ' entries have authoritative ComicVine IDs. No issue statuses will be modified.';
+            var alertHtml = '<strong>Library Action Preview:</strong> ' +
+                (summary.series_to_add ? '<strong>' + summary.series_to_add + '</strong> missing series will be added to your library, ' : '') +
+                '<strong>' + (summary.issues_to_want || 0) + '</strong> issues will be requested as Wanted, and <strong>' + (summary.unchanged_entries || 0) + '</strong> entries require no changes.';
 
             $('#modalAlertBox')
                 .removeClass('modal-alert-error modal-alert-info modal-alert-warning')
@@ -256,7 +368,7 @@
             $('#confirmImportBtn')
                 .show()
                 .prop('disabled', false)
-                .text('Confirm & Import Story Arc');
+                .text('Confirm & Apply to Library');
         }
 
         setTimeout(function() {
@@ -270,20 +382,23 @@
     function confirmCblImport() {
         if (!currentToken) return;
 
-        $('#confirmImportBtn').prop('disabled', true).text('Importing...');
+        $('#confirmImportBtn').prop('disabled', true).text('Importing & Reconciling...');
         $('#modalAlertBox').hide();
+
+        var params = getImportOptions();
+        params.token = currentToken;
 
         $.ajax({
             url: 'cbl_confirm_import',
             type: 'POST',
-            data: { token: currentToken },
+            data: params,
             dataType: 'json',
             success: function(resp) {
                 if (resp.status === 'success') {
                     $('#modalAlertBox')
                         .removeClass('modal-alert-error modal-alert-warning modal-alert-info')
                         .addClass('modal-alert-success')
-                        .html('<strong>Success!</strong> Story Arc imported. Redirecting...')
+                        .html('<strong>Success!</strong> Story Arc imported and library reconciled. Redirecting...')
                         .show();
                     setTimeout(function() {
                         window.location.href = 'detailStoryArc?StoryArcID=' + resp.storyarcid;
@@ -296,7 +411,7 @@
                         .show();
                     $('#confirmImportBtn').hide();
                 } else {
-                    $('#confirmImportBtn').prop('disabled', false).text('Confirm & Import Story Arc');
+                    $('#confirmImportBtn').prop('disabled', false).text('Confirm & Apply to Library');
                     $('#modalAlertBox')
                         .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
                         .addClass('modal-alert-error')
@@ -305,7 +420,7 @@
                 }
             },
             error: function() {
-                $('#confirmImportBtn').prop('disabled', false).text('Confirm & Import Story Arc');
+                $('#confirmImportBtn').prop('disabled', false).text('Confirm & Apply to Library');
                 $('#modalAlertBox')
                     .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
                     .addClass('modal-alert-error')
@@ -499,10 +614,13 @@
             .html('Fetching raw manifest from GitHub and reconciling with local library...')
             .show();
 
+        var params = getImportOptions();
+        params.entry_id = entryId;
+
         $.ajax({
             url: 'cbl_catalog_preview',
             type: 'GET',
-            data: { entry_id: entryId },
+            data: params,
             dataType: 'json',
             success: function(resp) {
                 if (resp.status === 'success') {
@@ -600,6 +718,218 @@
         });
     }
 
+    var currentReconcileArcId = null;
+
+    function openReconcileModal(arcId) {
+        currentReconcileArcId = arcId || pageConfig.storyarcid || $('#page_storyarcid').val();
+        if (!currentReconcileArcId) return;
+
+        $('#detailReconAlert').hide();
+        $('#detailReconSummaryContainer').hide();
+        $('#detailReconTableWrap').hide();
+        $('#confirmReconcileBtn').prop('disabled', false).text('Apply Library Changes');
+        $('#reconcileArcModal').fadeIn(150);
+
+        refreshDetailReconcilePreview();
+    }
+
+    function closeReconcileModal() {
+        $('#reconcileArcModal').fadeOut(150);
+    }
+
+    function refreshDetailReconcilePreview() {
+        if (!currentReconcileArcId) return;
+
+        var issuesOnly = $('#detailIssuesOnly').is(':checked');
+        var ignoreArchived = $('#detailIgnoreArchived').is(':checked');
+
+        $('#detailReconAlert')
+            .removeClass('modal-alert-error modal-alert-success modal-alert-warning')
+            .addClass('modal-alert-info')
+            .html('Evaluating library reconciliation...')
+            .show();
+
+        $.ajax({
+            url: 'cbl_reconcile_arc',
+            type: 'GET',
+            data: {
+                storyarcid: currentReconcileArcId,
+                apply: 'false',
+                import_mode: 'apply_library',
+                issuesonly: issuesOnly ? 'true' : 'false',
+                ignorearchived: ignoreArchived ? 'true' : 'false'
+            },
+            dataType: 'json',
+            success: function(resp) {
+                if (resp.status === 'success') {
+                    var s = resp.summary || {};
+                    $('#detailSummaryTotal').text(s.total_entries || 0);
+                    $('#detailSummaryAddSeries').text(s.series_to_add || 0);
+                    $('#detailSummaryMarkWanted').text(s.issues_to_want || 0);
+                    $('#detailSummaryUnchanged').text(s.unchanged_entries || 0);
+                    $('#detailSummaryArchived').text(s.archived_excluded || 0);
+                    $('#detailSummaryUnresolved').text(s.unresolved_entries || 0);
+
+                    $('#detailReconSummaryContainer').show();
+
+                    var rowsHtml = '';
+                    resp.results.forEach(function(item) {
+                        var statusClass = 'badge-status-unmatched';
+                        var rstate = item.resolution_state;
+                        if (rstate === 'Downloaded') statusClass = 'badge-status-downloaded';
+                        else if (rstate.indexOf('Monitored') !== -1 && rstate.indexOf('Unmonitored') === -1) statusClass = 'badge-status-monitored';
+                        else if (rstate.indexOf('Unmonitored') !== -1) statusClass = 'badge-status-unmonitored';
+                        else if (rstate.indexOf('Unknown') !== -1 || rstate.indexOf('Unmatched') !== -1) statusClass = 'badge-status-unmatched';
+
+                        var predAction = item.predicted_action || 'No action needed';
+                        var predClass = getPredictedActionBadgeClass(predAction);
+
+                        rowsHtml += '<tr>' +
+                            '<td><strong>#' + item.order + '</strong></td>' +
+                            '<td>' + (item.matched_comic_name || item.series_name || '—') + '</td>' +
+                            '<td>#' + (item.issue_number || '—') + '</td>' +
+                            '<td><span class="badge-status ' + statusClass + '">' + item.resolution_state + '</span></td>' +
+                            '<td><span class="badge-status ' + predClass + '">' + predAction + '</span></td>' +
+                        '</tr>';
+                    });
+                    $('#detailReconTableBody').html(rowsHtml);
+                    $('#detailReconTableWrap').show();
+
+                    var alertMsg = '<strong>Reconciliation Ready:</strong> ' +
+                        (s.series_to_add ? '<strong>' + s.series_to_add + '</strong> series to add, ' : '') +
+                        '<strong>' + (s.issues_to_want || 0) + '</strong> issues will be marked Wanted.';
+                    $('#detailReconAlert')
+                        .removeClass('modal-alert-error modal-alert-info')
+                        .addClass('modal-alert-success')
+                        .html(alertMsg)
+                        .show();
+                } else {
+                    $('#detailReconAlert')
+                        .removeClass('modal-alert-success modal-alert-info')
+                        .addClass('modal-alert-error')
+                        .text(resp.message || 'Failed to preview reconciliation.')
+                        .show();
+                }
+            },
+            error: function() {
+                $('#detailReconAlert')
+                    .removeClass('modal-alert-success modal-alert-info')
+                    .addClass('modal-alert-error')
+                    .text('Error communicating with server.')
+                    .show();
+            }
+        });
+    }
+
+    function applyArcReconciliation() {
+        if (!currentReconcileArcId) return;
+
+        var issuesOnly = $('#detailIssuesOnly').is(':checked');
+        var ignoreArchived = $('#detailIgnoreArchived').is(':checked');
+
+        $('#confirmReconcileBtn').prop('disabled', true).text('Applying Changes...');
+
+        $.ajax({
+            url: 'cbl_reconcile_arc',
+            type: 'POST',
+            data: {
+                storyarcid: currentReconcileArcId,
+                apply: 'true',
+                import_mode: 'apply_library',
+                issuesonly: issuesOnly ? 'true' : 'false',
+                ignorearchived: ignoreArchived ? 'true' : 'false'
+            },
+            dataType: 'json',
+            success: function(resp) {
+                if (resp.status === 'success') {
+                    $('#detailReconAlert')
+                        .removeClass('modal-alert-error modal-alert-info')
+                        .addClass('modal-alert-success')
+                        .html('<strong>Success!</strong> ' + resp.message + ' Refreshing page...')
+                        .show();
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 900);
+                } else {
+                    $('#confirmReconcileBtn').prop('disabled', false).text('Apply Library Changes');
+                    $('#detailReconAlert')
+                        .removeClass('modal-alert-success modal-alert-info')
+                        .addClass('modal-alert-error')
+                        .text(resp.message || 'Reconciliation failed.')
+                        .show();
+                }
+            },
+            error: function() {
+                $('#confirmReconcileBtn').prop('disabled', false).text('Apply Library Changes');
+                $('#detailReconAlert')
+                    .removeClass('modal-alert-success modal-alert-info')
+                    .addClass('modal-alert-error')
+                    .text('Error communicating with server during reconciliation.')
+                    .show();
+            }
+        });
+    }
+
+    function triggerEntryAction(arcId, issueArcId, action) {
+        var aid = arcId || pageConfig.storyarcid || $('#page_storyarcid').val();
+        if (!aid || !issueArcId || !action) return;
+
+        var rowId = '#arcRow_' + issueArcId;
+        var badgeId = '#statusBadge_' + issueArcId;
+
+        $('#arcActionAlertBox').hide();
+
+        $.ajax({
+            url: 'cbl_entry_action',
+            type: 'POST',
+            data: {
+                storyarcid: aid,
+                issue_arc_id: issueArcId,
+                action: action
+            },
+            dataType: 'json',
+            success: function(resp) {
+                if (resp.status === 'success') {
+                    $('#arcActionAlertBox')
+                        .removeClass('modal-alert-error modal-alert-warning modal-alert-info')
+                        .addClass('modal-alert-success')
+                        .html('<strong>Action Completed:</strong> ' + resp.message)
+                        .slideDown(150);
+
+                    if (resp.resolution_state) {
+                        var statusClass = 'badge-status-unmatched';
+                        if (resp.resolution_state === 'Downloaded') statusClass = 'badge-status-downloaded';
+                        else if (resp.resolution_state.indexOf('Monitored') !== -1) statusClass = 'badge-status-monitored';
+                        else if (resp.resolution_state.indexOf('Unmonitored') !== -1) statusClass = 'badge-status-unmonitored';
+
+                        $(badgeId).attr('class', 'badge-status ' + statusClass).text(resp.resolution_state);
+                    } else if (action === 'mark_wanted') {
+                        $(badgeId).attr('class', 'badge-status badge-status-monitored').text('Missing (Monitored)');
+                    }
+                } else if (resp.status === 'info') {
+                    $('#arcActionAlertBox')
+                        .removeClass('modal-alert-error modal-alert-warning modal-alert-success')
+                        .addClass('modal-alert-info')
+                        .html('<strong>Notice:</strong> ' + resp.message)
+                        .slideDown(150);
+                } else {
+                    $('#arcActionAlertBox')
+                        .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
+                        .addClass('modal-alert-error')
+                        .html('<strong>Error:</strong> ' + (resp.message || 'Action failed.'))
+                        .slideDown(150);
+                }
+            },
+            error: function() {
+                $('#arcActionAlertBox')
+                    .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
+                    .addClass('modal-alert-error')
+                    .html('<strong>Error:</strong> Failed to execute action on server.')
+                    .slideDown(150);
+            }
+        });
+    }
+
     $(document).ready(function() {
         initConfig();
 
@@ -637,6 +967,8 @@
 
     window.switchImportTab = switchImportTab;
     window.updateManifestMeta = updateManifestMeta;
+    window.selectImportMode = selectImportMode;
+    window.handleImportOptionChange = handleImportOptionChange;
     window.openCblModal = openCblModal;
     window.closeCblModal = closeCblModal;
     window.handleFileSelected = handleFileSelected;
@@ -652,5 +984,11 @@
     window.openDeleteArcModal = openDeleteArcModal;
     window.closeDeleteArcModal = closeDeleteArcModal;
     window.confirmDeleteStoryArc = confirmDeleteStoryArc;
+    window.openReconcileModal = openReconcileModal;
+    window.closeReconcileModal = closeReconcileModal;
+    window.refreshDetailReconcilePreview = refreshDetailReconcilePreview;
+    window.applyArcReconciliation = applyArcReconciliation;
+    window.triggerEntryAction = triggerEntryAction;
+    window.getCsrfToken = getCsrfToken;
 
 })(window, jQuery);

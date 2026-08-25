@@ -22,6 +22,8 @@ from mylar.extensions.storyarcs.cbl_service import (
     upload_cbl_manifest,
     preview_cbl_manifest,
     confirm_cbl_import,
+    reconcile_existing_storyarc,
+    execute_entry_action,
     delete_cbl_arc,
 )
 
@@ -29,7 +31,7 @@ from mylar.extensions.storyarcs.cbl_service import (
 def get_storyarc_catalog(arcid=None, myDB=None):
     """
     Queries and enriches the Story Arc catalog list.
-    
+
     :param arcid: Optional single StoryArcID or CV_ArcID filter
     :param myDB: Optional DBConnection instance
     :return: List of enriched story arc dictionaries
@@ -117,7 +119,7 @@ def get_storyarc_detail(storyarc_id, storyarc_name=None, cv_arc_id=None, myDB=No
     Queries and builds detailed reading order and provenance data for a Story Arc.
     - Preserves downloaded-arc location refresh behavior via helpers.updatearc_locs.
     - Preserves complete template context for Classic, Carbon, and Modern templates.
-    
+
     :param storyarc_id: Story Arc ID string (e.g. 'cbl_c33e762620fe' or numeric)
     :param storyarc_name: Optional Story Arc Name
     :param cv_arc_id: Optional ComicVine Arc ID
@@ -262,6 +264,11 @@ def get_storyarc_detail(storyarc_id, storyarc_name=None, cv_arc_id=None, myDB=No
         if not store_date:
             store_date = release_date or issue_date
 
+        iss_status_val = _row_val(iss, 'Status') if iss else None
+        is_unmonitored = (sid is not None and not is_monitored)
+        can_mark_wanted = bool(is_monitored and iss_status_val in ('Skipped', 'Archived', 'Ignored', 'Wanted', 'Loading'))
+        can_add_series = bool(is_unmonitored and sid)
+
         al_dict['ReadingOrder'] = order
         al_dict['StoreDate'] = store_date
         al_dict['IssueDate'] = issue_date
@@ -270,6 +277,10 @@ def get_storyarc_detail(storyarc_id, storyarc_name=None, cv_arc_id=None, myDB=No
         al_dict['IsDownloaded'] = is_downloaded
         al_dict['Location'] = mylar_loc or _row_val(al, 'Location')
         al_dict['IsMonitored'] = is_monitored
+        al_dict['IsUnmonitoredSeries'] = is_unmonitored
+        al_dict['CanMarkWanted'] = can_mark_wanted
+        al_dict['CanAddSeries'] = can_add_series
+        al_dict['IssueStatus'] = iss_status_val
         al_dict['ComicName'] = sname
         al_dict['IssueNumber'] = inum
         al_dict['IssueName'] = issue_title
@@ -291,9 +302,19 @@ def get_storyarc_detail(storyarc_id, storyarc_name=None, cv_arc_id=None, myDB=No
         percent = 0
 
     manifest = myDB.selectone("SELECT * FROM storyarc_manifests WHERE StoryArcID=?", [storyarc_id]).fetchone()
-    spanyears = helpers.spantheyears(storyarc_id) if storyarc_id else _row_val(arcinfo[0], 'SeriesYear')
+    try:
+        spanyears = helpers.spantheyears(storyarc_id) if storyarc_id else None
+    except Exception:
+        spanyears = None
+
     if not spanyears or spanyears in ('0000-00-00', '0000-00', '0000', 'None') or str(spanyears).startswith('0000'):
-        spanyears = '—'
+        years = [x.get('SeriesYear') or x.get('IssueYEAR') for x in enriched_readlist if x.get('SeriesYear') or x.get('IssueYEAR')]
+        years = [y for y in years if y and str(y).isdigit() and int(y) > 1900]
+        if years:
+            min_y, max_y = min(years), max(years)
+            spanyears = f"{min_y} - {max_y}" if min_y != max_y else str(min_y)
+        else:
+            spanyears = _row_val(arcinfo[0], 'SeriesYear') if arcinfo else '—'
 
     storyarc_name = _row_val(arcinfo[0], 'StoryArc') or (manifest['StoryArcName'] if manifest else 'Story Arc')
     publisher = _row_val(arcinfo[0], 'Publisher') or (manifest['SourceName'] if manifest else 'Unknown')

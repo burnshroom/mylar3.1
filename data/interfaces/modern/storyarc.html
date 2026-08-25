@@ -5,7 +5,8 @@
 
 <%def name="body()">
     <input type="hidden" id="page_name" value="storyarc" />
-    
+    <input type="hidden" id="cbl_csrf_token" value="${mylar.extensions.storyarcs.controller.get_or_create_cbl_csrf_token()}" />
+
     <div class="content-header">
         <div class="content-header-left">
             <h1 class="page-title">Story Arcs</h1>
@@ -219,6 +220,75 @@
                     <div class="manifest-meta-row"><strong>SHA-256:</strong> <code id="metaHash" class="hash-code">—</code></div>
                 </div>
 
+                <!-- Import Behavior & Options Controls -->
+                <div id="cblImportOptionsContainer" class="import-options-card" style="display:none;">
+                    <div class="import-options-title">Import Mode &amp; Library Behavior</div>
+                    <div class="import-mode-group">
+                        <label class="import-mode-card active" id="modeCardApply" onclick="selectImportMode('apply_library')">
+                            <input type="radio" name="cblImportMode" id="importModeApply" value="apply_library" checked onchange="handleImportOptionChange()" />
+                            <div class="import-mode-info">
+                                <div class="import-mode-name">Apply to Library (Recommended)</div>
+                                <div class="import-mode-desc">Add missing series, queue listed issues as Wanted, and record reading order.</div>
+                            </div>
+                        </label>
+                        <label class="import-mode-card" id="modeCardReadingList" onclick="selectImportMode('reading_list_only')">
+                            <input type="radio" name="cblImportMode" id="importModeReadingList" value="reading_list_only" onchange="handleImportOptionChange()" />
+                            <div class="import-mode-info">
+                                <div class="import-mode-name">Reading List Only</div>
+                                <div class="import-mode-desc">Record the Story Arc manifest sequence without modifying any series or issue statuses.</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Granular Library Options (Active when Apply to Library is selected) -->
+                    <div id="applyLibraryOptionsGroup" class="library-options-group">
+                        <div class="checkbox-option-row">
+                            <label class="checkbox-label" for="cblIssuesOnly">
+                                <input type="checkbox" id="cblIssuesOnly" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) else ''} onchange="handleImportOptionChange()" />
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-text"><strong>Only mark issues from list as wanted</strong> (suppresses auto-wanting entire new series)</span>
+                            </label>
+                        </div>
+                        <div class="checkbox-option-row">
+                            <label class="checkbox-label" for="cblIgnoreArchived">
+                                <input type="checkbox" id="cblIgnoreArchived" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) else ''} onchange="handleImportOptionChange()" />
+                                <span class="checkbox-custom"></span>
+                                <span class="checkbox-text"><strong>Do not mark Archived issues as Wanted</strong> (leave existing Archived issues untouched)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reconciliation Summary Stats -->
+                <div id="reconSummaryContainer" class="recon-summary-wrap" style="display:none;">
+                    <div class="recon-summary-grid">
+                        <div class="recon-stat-card">
+                            <div class="recon-stat-val" id="summaryTotalEntries">0</div>
+                            <div class="recon-stat-lbl">Total Entries</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-add">
+                            <div class="recon-stat-val" id="summarySeriesToAdd">0</div>
+                            <div class="recon-stat-lbl">Add Series</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-wanted">
+                            <div class="recon-stat-val" id="summaryIssuesToWant">0</div>
+                            <div class="recon-stat-lbl">Mark Wanted</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-unchanged">
+                            <div class="recon-stat-val" id="summaryUnchanged">0</div>
+                            <div class="recon-stat-lbl">Unchanged</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-archived">
+                            <div class="recon-stat-val" id="summaryArchivedExcluded">0</div>
+                            <div class="recon-stat-lbl">Archived Excluded</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-unresolved">
+                            <div class="recon-stat-val" id="summaryUnresolved">0</div>
+                            <div class="recon-stat-lbl">Unresolved</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Reconciliation Preview Table -->
                 <div id="previewResultsContainer" style="display:none;">
                     <h4 class="preview-section-title">Reconciliation Preview</h4>
@@ -231,6 +301,7 @@
                                     <th>Issue</th>
                                     <th>ComicVine IDs</th>
                                     <th>Local Resolution</th>
+                                    <th>Predicted Action</th>
                                 </tr>
                             </thead>
                             <tbody id="previewTableBody"></tbody>
@@ -519,6 +590,126 @@
         .manifest-meta-row strong { color: #94a3b8; }
         .manifest-meta-row code { color: #cbd5e1; word-break: break-all; }
         .manifest-meta-box .hash-code { color: #a78bfa; }
+        /* Import Options Card */
+        .import-options-card {
+            background: #131722;
+            border: 1px solid #252d3d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 14px;
+        }
+        .import-options-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #cbd5e1;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .import-mode-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .import-mode-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            background: #181d2a;
+            border: 1px solid #2a3346;
+            border-radius: 8px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .import-mode-card:hover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .import-mode-card.active {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.12);
+            box-shadow: 0 0 0 1px #3b82f6;
+        }
+        .import-mode-card input[type="radio"] {
+            margin-top: 2px;
+            cursor: pointer;
+        }
+        .import-mode-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .import-mode-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+        .import-mode-desc {
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.35;
+        }
+        .library-options-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 8px;
+            border-top: 1px solid #1f2737;
+        }
+        .checkbox-option-row {
+            display: flex;
+            align-items: center;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+        .checkbox-label input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        /* Reconciliation Summary Grid */
+        .recon-summary-wrap {
+            margin-top: 14px;
+        }
+        .recon-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+        .recon-stat-card {
+            background: #131722;
+            border: 1px solid #252d3d;
+            border-radius: 8px;
+            padding: 8px 6px;
+            text-align: center;
+        }
+        .recon-stat-val {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f1f5f9;
+            line-height: 1.2;
+        }
+        .recon-stat-lbl {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stat-card-add .recon-stat-val { color: #c084fc; }
+        .stat-card-wanted .recon-stat-val { color: #60a5fa; }
+        .stat-card-unchanged .recon-stat-val { color: #34d399; }
+        .stat-card-archived .recon-stat-val { color: #fbbf24; }
+        .stat-card-unresolved .recon-stat-val { color: #f87171; }
+
         .preview-section-title { font-size: 13px; font-weight: 600; color: #f1f5f9; margin: 16px 0 8px 0; }
         .preview-table-wrap {
             max-height: 240px;
@@ -536,7 +727,7 @@
             text-align: left;
             border-bottom: 1px solid #252d3d;
         }
-        .preview-table th { color: #94a3b8; font-weight: 600; background: #181d2a; position: sticky; top: 0; }
+        .preview-table th { color: #94a3b8; font-weight: 600; background: #181d2a; position: sticky; top: 0; z-index: 2; }
         .preview-table td { color: #e2e8f0; }
         .badge-status {
             padding: 2px 6px;
@@ -544,11 +735,18 @@
             font-size: 11px;
             font-weight: 600;
             display: inline-block;
+            white-space: nowrap;
         }
-        .badge-status-downloaded { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-        .badge-status-monitored { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-        .badge-status-unmonitored { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
-        .badge-status-unmatched { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+        .badge-status-downloaded { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-status-wanted { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-status-snatched { background: rgba(6, 182, 212, 0.2); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+        .badge-status-monitored { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-status-markwanted { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); }
+        .badge-status-addseries { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge-status-archived { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); }
+        .badge-status-readinglist { background: rgba(71, 85, 105, 0.2); color: #cbd5e1; border: 1px solid rgba(71, 85, 105, 0.3); }
+        .badge-status-unmonitored { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge-status-unmatched { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
         .modal-footer {
             padding: 14px 20px;
             border-top: 1px solid #2a3346;
@@ -784,6 +982,14 @@
             .catalog-table th, .catalog-table td {
                 padding: 6px 6px;
                 font-size: 11px;
+            }
+            .import-mode-group {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+            .recon-summary-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 6px;
             }
             .dropzone-text {
                 font-size: 12px;

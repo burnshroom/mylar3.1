@@ -1,0 +1,13 @@
+# ==============================================================================
+# Optional Loopback Debugging Override for mylar-modern
+# ==============================================================================
+# Usage on host:
+#   docker compose -f docker-compose.yml -f docker-compose.loopback.yml up -d
+#
+# Binds the container web port strictly to 127.0.0.1 on the host interface.
+# NEVER binds to 0.0.0.0 or exposes the staging port to external interfaces.
+# ==============================================================================
+services:
+  mylar-modern:
+    ports:
+      - "127.0.0.1:${HOST_PORT:?Error: HOST_PORT is required when using loopback override (e.g. 8095)}:8090"

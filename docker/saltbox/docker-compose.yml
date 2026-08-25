@@ -1,0 +1,45 @@
+services:
+  mylar-modern:
+    image: ghcr.io/burnshroom/mylar3-modern:sha-52b2a134@sha256:a4e76c12b9d8431f99c82b130e5f22e84128509c3140510da8e79b9a672809e5
+    container_name: mylar-modern
+    hostname: mylar-modern
+    restart: unless-stopped
+    environment:
+      PUID: "${PUID:?Error: PUID is required (e.g. 1000)}"
+      PGID: "${PGID:?Error: PGID is required (e.g. 1000)}"
+      TZ: "${TZ:?Error: TZ is required (e.g. Etc/UTC)}"
+      UMASK: "${UMASK:-022}"
+    volumes:
+      - "${APPDATA_DIR:?Error: APPDATA_DIR is required (e.g. /opt/mylar-modern)}/config:/config"
+      - "${TEST_COMICS_DIR:?Error: TEST_COMICS_DIR is required (e.g. /opt/mylar-modern/test_comics)}:/comics:ro"
+      - "${DOWNLOADS_DIR:?Error: DOWNLOADS_DIR is required (e.g. /opt/mylar-modern/downloads)}:/downloads"
+    networks:
+      - saltbox_net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/home', timeout=5).getcode() == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      # Instructs SaltBox backup automation not to stop/manage this staging container lifecycle during SaltBox backup operations
+      com.github.saltbox.saltbox_managed: "false"
+      traefik.enable: "true"
+      traefik.docker.network: "${DOCKER_NETWORK:?Error: DOCKER_NETWORK is required (e.g. saltbox)}"
+      # HTTPS Ingress Router
+      traefik.http.routers.mylar-modern.entrypoints: "${TRAEFIK_HTTPS_ENTRYPOINT:?Error: TRAEFIK_HTTPS_ENTRYPOINT is required (e.g. websecure)}"
+      traefik.http.routers.mylar-modern.rule: "Host(`${SUBDOMAIN:?Error: SUBDOMAIN is required}.${DOMAIN:?Error: DOMAIN is required}`)"
+      traefik.http.routers.mylar-modern.tls: "true"
+      traefik.http.routers.mylar-modern.tls.certresolver: "${TRAEFIK_CERTRESOLVER:?Error: TRAEFIK_CERTRESOLVER is required (e.g. cf)}"
+      traefik.http.routers.mylar-modern.middlewares: "${TRAEFIK_HTTPS_MIDDLEWARES:?Error: TRAEFIK_HTTPS_MIDDLEWARES is required}"
+      # HTTP Ingress Router (Redirect to HTTPS)
+      traefik.http.routers.mylar-modern-http.entrypoints: "${TRAEFIK_HTTP_ENTRYPOINT:?Error: TRAEFIK_HTTP_ENTRYPOINT is required (e.g. web)}"
+      traefik.http.routers.mylar-modern-http.rule: "Host(`${SUBDOMAIN:?Error: SUBDOMAIN is required}.${DOMAIN:?Error: DOMAIN is required}`)"
+      traefik.http.routers.mylar-modern-http.middlewares: "${TRAEFIK_HTTP_MIDDLEWARES:?Error: TRAEFIK_HTTP_MIDDLEWARES is required}"
+      # Internal Service Loadbalancer Target Port
+      traefik.http.services.mylar-modern.loadbalancer.server.port: "8090"
+
+networks:
+  saltbox_net:
+    name: "${DOCKER_NETWORK:?Error: DOCKER_NETWORK is required (e.g. saltbox)}"
+    external: true

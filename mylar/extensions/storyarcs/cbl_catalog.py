@@ -399,7 +399,7 @@ def search_catalog(query="", publisher="", category="", limit=200):
     }
 
 
-def fetch_and_stage_catalog_cbl(entry_id, myDB=None, custom_fetcher=None):
+def fetch_and_stage_catalog_cbl(entry_id, myDB=None, custom_fetcher=None, import_mode='apply_library', issuesonly=None, ignorearchived=None):
     """
     Fetches the exact raw CBL bytes for a selected catalog entry at the snapshot's pinned commit.
     - Resolves entry_id from the local snapshot.
@@ -412,6 +412,9 @@ def fetch_and_stage_catalog_cbl(entry_id, myDB=None, custom_fetcher=None):
     :param entry_id: Opaque catalog entry ID (e.g. 'cbl_dt_3d040326a914')
     :param myDB: Optional DBConnection instance
     :param custom_fetcher: Optional custom HTTP fetcher callable
+    :param import_mode: 'apply_library' or 'reading_list_only'
+    :param issuesonly: Overrides autowant_all when adding new volume
+    :param ignorearchived: Skips marking archived issues wanted
     :return: Reconciliation preview dictionary with provenance metadata
     """
     if not entry_id or not isinstance(entry_id, str):
@@ -488,7 +491,7 @@ def fetch_and_stage_catalog_cbl(entry_id, myDB=None, custom_fetcher=None):
         return {'status': 'error', 'message': f'Failed to store downloaded manifest on server: {e}'}
 
     # Run authoritative reconciliation
-    recon_result = cbl_service.parse_and_reconcile_cbl(raw_bytes, filename, myDB)
+    recon_result = cbl_service.parse_and_reconcile_cbl(raw_bytes, filename, myDB, import_mode=import_mode, issuesonly=issuesonly, ignorearchived=ignorearchived)
     if recon_result.get('status') != 'success':
         return recon_result
 
@@ -515,5 +518,6 @@ def fetch_and_stage_catalog_cbl(entry_id, myDB=None, custom_fetcher=None):
         'total_issues': len(recon_result['results']),
         'is_already_imported': bool(existing),
         'existing_arc_id': existing['StoryArcID'] if existing else None,
+        'summary': recon_result['summary'],
         'results': recon_result['results']
     }

@@ -5,7 +5,8 @@
 
 <%def name="body()">
     <input type="hidden" id="page_name" value="storyarc_detail" />
-    
+    <input type="hidden" id="cbl_csrf_token" value="${mylar.extensions.storyarcs.controller.get_or_create_cbl_csrf_token()}" />
+
     <div class="content-header">
         <div class="content-header-left">
             <a href="storyarc_main" class="back-link">
@@ -36,6 +37,13 @@
                     <span>Shelf</span>
                 </button>
             </div>
+            <button type="button" class="btn-primary" id="reconcileArcBtn" onclick="openReconcileModal('${storyarcid}')" title="Reconcile Arc with Library">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 8A6 6 0 1 1 8 2"></path>
+                    <polyline points="8 2 12 2 12 6"></polyline>
+                </svg>
+                Reconcile with Library
+            </button>
             <button type="button" class="btn-danger-outline" id="deleteArcBtn" onclick="openDeleteArcModal()" title="Delete Story Arc">
                 <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 13 6"></polyline>
@@ -129,6 +137,9 @@
             </div>
         </div>
 
+        <!-- Global Arc Notification Banner -->
+        <div id="arcActionAlertBox" class="modal-alert" style="display:none; margin-bottom:16px;"></div>
+
         <!-- List View Container -->
         <div id="arcListView" class="arc-view-container">
             <div class="table-card">
@@ -143,7 +154,7 @@
                                 <th class="col-title">Chapter / Story Title</th>
                                 <th class="col-date">Date</th>
                                 <th class="col-status">Status</th>
-                                <th class="col-actions">Series</th>
+                                <th class="col-actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -159,8 +170,10 @@
                                         status_class = 'badge-status-unmonitored'
                                     elif 'Unknown' in res_state or 'Unmatched' in res_state:
                                         status_class = 'badge-status-unmatched'
+
+                                    issue_arc_id = item.get('IssueArcID') or f"{storyarcid}_{item.get('ReadingOrder')}"
                                 %>
-                                <tr>
+                                <tr id="arcRow_${issue_arc_id}">
                                     <td class="col-order">
                                         <span class="reading-order-pill">#${item['ReadingOrder']}</span>
                                     </td>
@@ -193,19 +206,33 @@
                                         <span class="date-text">${item['StoreDate'] or '—'}</span>
                                     </td>
                                     <td class="col-status">
-                                        <span class="badge-status ${status_class}">${res_state}</span>
+                                        <span class="badge-status ${status_class}" id="statusBadge_${issue_arc_id}">${res_state}</span>
                                     </td>
                                     <td class="col-actions">
-                                        %if item.get('IsMonitored') and item.get('ComicID'):
-                                            <a href="comicDetails?ComicID=${item['ComicID']}" class="btn-action-open" title="Open in Series Details">
-                                                View Series
-                                                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M6 3l5 5-5 5"></path>
-                                                </svg>
-                                            </a>
-                                        %else:
-                                            <span class="action-disabled-text">—</span>
-                                        %endif
+                                        <div class="action-btn-group">
+                                            %if item.get('CanAddSeries'):
+                                                <button type="button" class="btn-entry-action btn-add-series" onclick="triggerEntryAction('${storyarcid}', '${issue_arc_id}', 'add_series')" title="Add Series to Library &amp; Watch Issue">
+                                                    Add Series
+                                                </button>
+                                            %elif item.get('CanMarkWanted'):
+                                                <button type="button" class="btn-entry-action btn-mark-wanted" onclick="triggerEntryAction('${storyarcid}', '${issue_arc_id}', 'mark_wanted')" title="Mark Issue as Wanted">
+                                                    Mark Wanted
+                                                </button>
+                                            %endif
+
+                                            %if item.get('IsMonitored') and item.get('ComicID'):
+                                                <a href="comicDetails?ComicID=${item['ComicID']}" class="btn-action-open" title="Open in Series Details">
+                                                    Series
+                                                    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M6 3l5 5-5 5"></path>
+                                                    </svg>
+                                                </a>
+                                            %else:
+                                                <button type="button" class="btn-entry-action btn-retry-res" onclick="triggerEntryAction('${storyarcid}', '${issue_arc_id}', 'retry_resolution')" title="Retry Resolution against Library">
+                                                    Retry
+                                                </button>
+                                            %endif
+                                        </div>
                                     </td>
                                 </tr>
                             %endfor
@@ -231,7 +258,7 @@
                         elif 'Unknown' in res_state or 'Unmatched' in res_state:
                             status_class = 'badge-status-unmatched'
                     %>
-                    <div class="arc-shelf-card ${'is-monitored' if item.get('IsMonitored') else ''}" 
+                    <div class="arc-shelf-card ${'is-monitored' if item.get('IsMonitored') else ''}"
                          %if item.get('IsMonitored') and item.get('ComicID'):
                              onclick="window.location.href='comicDetails?ComicID=${item['ComicID']}';"
                          %endif
@@ -294,6 +321,91 @@
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" onclick="closeDeleteArcModal()">Cancel</button>
                 <button type="button" class="btn-danger" id="confirmDeleteArcBtn" onclick="confirmDeleteStoryArc()">Delete Story Arc</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reconcile Arc Modal -->
+    <div id="reconcileArcModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="reconcileModalTitle">
+        <div class="modal-card" style="max-width: 760px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="reconcileModalTitle">Reconcile Story Arc with Library</h3>
+                <button type="button" class="modal-close-btn" onclick="closeReconcileModal()" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px; color:#cbd5e1; line-height:1.5; margin:0 0 12px 0;">
+                    Reconciliation evaluates all <strong>${total_count} issues</strong> in <strong>${storyarcname}</strong> against your current library to identify missing volumes or issues to request.
+                </p>
+
+                <!-- Options -->
+                <div class="import-options-card" style="margin-top:0; margin-bottom:12px;">
+                    <div class="library-options-group" style="border-top:none; padding-top:0;">
+                        <div class="checkbox-option-row">
+                            <label class="checkbox-label" for="detailIssuesOnly">
+                                <input type="checkbox" id="detailIssuesOnly" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) else ''} onchange="refreshDetailReconcilePreview()" />
+                                <span class="checkbox-text"><strong>Only mark issues from list as wanted</strong> (suppresses auto-wanting entire new series)</span>
+                            </label>
+                        </div>
+                        <div class="checkbox-option-row">
+                            <label class="checkbox-label" for="detailIgnoreArchived">
+                                <input type="checkbox" id="detailIgnoreArchived" ${'checked="checked"' if getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) else ''} onchange="refreshDetailReconcilePreview()" />
+                                <span class="checkbox-text"><strong>Do not mark Archived issues as Wanted</strong> (preserves existing Archived status)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reconciliation Summary Stats -->
+                <div id="detailReconSummaryContainer" class="recon-summary-wrap" style="display:none; margin-bottom:12px;">
+                    <div class="recon-summary-grid">
+                        <div class="recon-stat-card">
+                            <div class="recon-stat-val" id="detailSummaryTotal">0</div>
+                            <div class="recon-stat-lbl">Total Entries</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-add">
+                            <div class="recon-stat-val" id="detailSummaryAddSeries">0</div>
+                            <div class="recon-stat-lbl">Add Series</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-wanted">
+                            <div class="recon-stat-val" id="detailSummaryMarkWanted">0</div>
+                            <div class="recon-stat-lbl">Mark Wanted</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-unchanged">
+                            <div class="recon-stat-val" id="detailSummaryUnchanged">0</div>
+                            <div class="recon-stat-lbl">Unchanged</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-archived">
+                            <div class="recon-stat-val" id="detailSummaryArchived">0</div>
+                            <div class="recon-stat-lbl">Archived Excluded</div>
+                        </div>
+                        <div class="recon-stat-card stat-card-unresolved">
+                            <div class="recon-stat-val" id="detailSummaryUnresolved">0</div>
+                            <div class="recon-stat-lbl">Unresolved</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reconciliation Preview Table -->
+                <div id="detailReconTableWrap" class="table-responsive preview-table-wrap" style="display:none; max-height:220px;">
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Series</th>
+                                <th>Issue</th>
+                                <th>Local Resolution</th>
+                                <th>Predicted Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailReconTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="detailReconAlert" class="modal-alert" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeReconcileModal()">Cancel</button>
+                <button type="button" class="btn-success" id="confirmReconcileBtn" onclick="applyArcReconciliation()">Apply Library Changes</button>
             </div>
         </div>
     </div>
@@ -575,7 +687,7 @@
         .badge-status-monitored { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
         .badge-status-unmonitored { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
         .badge-status-unmatched { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
-        
+
         /* Shelf Grid */
         .arc-shelf-grid {
             display: grid;
@@ -679,6 +791,210 @@
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
         }
+        /* Entry Action Buttons */
+        .action-btn-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .btn-entry-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .btn-add-series {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+        .btn-add-series:hover {
+            background: rgba(168, 85, 247, 0.25);
+            border-color: #c084fc;
+        }
+        .btn-mark-wanted {
+            background: rgba(249, 115, 22, 0.15);
+            color: #fb923c;
+            border-color: rgba(249, 115, 22, 0.3);
+        }
+        .btn-mark-wanted:hover {
+            background: rgba(249, 115, 22, 0.25);
+            border-color: #fb923c;
+        }
+        .btn-retry-res {
+            background: rgba(100, 116, 139, 0.15);
+            color: #94a3b8;
+            border-color: rgba(100, 116, 139, 0.3);
+        }
+        .btn-retry-res:hover {
+            background: rgba(100, 116, 139, 0.25);
+            color: #f1f5f9;
+        }
+
+        /* Modal & Recon Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+        .modal-card {
+            background: #1e2433;
+            border: 1px solid #2f384d;
+            border-radius: 14px;
+            width: 100%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #2a3346;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin: 0;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-close-btn:hover { color: #f8fafc; }
+        .modal-body {
+            padding: 20px 20px 24px 20px;
+            overflow-y: auto;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .modal-footer {
+            padding: 14px 20px;
+            border-top: 1px solid #2a3346;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            background: #181d2a;
+            border-bottom-left-radius: 14px;
+            border-bottom-right-radius: 14px;
+            flex-shrink: 0;
+        }
+        .modal-alert {
+            margin-top: 10px;
+            margin-bottom: 8px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .modal-alert-info { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .modal-alert-success { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .modal-alert-warning { background: rgba(245, 158, 11, 0.15); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.35); }
+        .modal-alert-error { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        .import-options-card {
+            background: #131722;
+            border: 1px solid #252d3d;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .library-options-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .checkbox-option-row {
+            display: flex;
+            align-items: center;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+        .checkbox-label input[type="checkbox"] { cursor: pointer; }
+
+        .recon-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+        .recon-stat-card {
+            background: #131722;
+            border: 1px solid #252d3d;
+            border-radius: 8px;
+            padding: 8px 6px;
+            text-align: center;
+        }
+        .recon-stat-val {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f1f5f9;
+            line-height: 1.2;
+        }
+        .recon-stat-lbl {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stat-card-add .recon-stat-val { color: #c084fc; }
+        .stat-card-wanted .recon-stat-val { color: #60a5fa; }
+        .stat-card-unchanged .recon-stat-val { color: #34d399; }
+        .stat-card-archived .recon-stat-val { color: #fbbf24; }
+        .stat-card-unresolved .recon-stat-val { color: #f87171; }
+
+        .preview-table-wrap {
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid #2a3346;
+            border-radius: 8px;
+        }
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .preview-table th, .preview-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #252d3d;
+        }
+        .preview-table th { color: #94a3b8; font-weight: 600; background: #181d2a; position: sticky; top: 0; z-index: 2; }
+        .preview-table td { color: #e2e8f0; }
+
+        .badge-status-markwanted { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); }
+        .badge-status-addseries { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge-status-archived { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3); }
+        .badge-status-readinglist { background: rgba(71, 85, 105, 0.2); color: #cbd5e1; border: 1px solid rgba(71, 85, 105, 0.3); }
+
         /* Mobile Breakpoints */
         @media (max-width: 640px) {
             .arc-hero-card { flex-direction: column; padding: 16px; gap: 16px; }
@@ -686,6 +1002,11 @@
             .arc-hero-title { font-size: 20px; }
             .provenance-grid { grid-template-columns: 1fr; }
             .col-title, .col-date { display: none; }
+            .recon-summary-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+            .modal-overlay { padding: 12px 10px; }
+            .modal-footer { flex-direction: column-reverse; gap: 8px; }
+            .modal-footer button { width: 100%; justify-content: center; }
+            .action-btn-group { flex-direction: column; align-items: stretch; }
         }
     </style>
 </%def>
