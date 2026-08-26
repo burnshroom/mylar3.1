@@ -208,11 +208,16 @@ def parse_and_reconcile_cbl(raw_bytes, sanitized_name, myDB=None, import_mode='a
                     iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
                     if not iss:
                         iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+                    if not iss and cv_sid and inum:
+                        int_num = int(inum) if str(inum).isdigit() else -1
+                        iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?)", [cv_sid, str(inum), int_num]).fetchone()
+                        if not iss:
+                            iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?) AND NOT Deleted", [cv_sid, str(inum), int_num]).fetchone()
 
                     if not iss:
-                        res_state = 'Unknown / Unmatched Reference'
-                        pred_action = 'Cannot resolve safely'
-                        unresolved_count += 1
+                        res_state = 'Series Monitored (Issue Pending)'
+                        pred_action = 'Series monitored — issue indexing pending'
+                        unchanged_count += 1
                     else:
                         mylar_iid = iss['IssueID']
                         mylar_ititle = iss['IssueName']
@@ -813,11 +818,16 @@ def reconcile_existing_storyarc(storyarc_id, myDB=None, import_mode='apply_libra
                     iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
                     if not iss:
                         iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+                    if not iss and cv_sid and inum:
+                        int_num = int(inum) if str(inum).isdigit() else -1
+                        iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?)", [cv_sid, str(inum), int_num]).fetchone()
+                        if not iss:
+                            iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?) AND NOT Deleted", [cv_sid, str(inum), int_num]).fetchone()
 
                     if not iss:
-                        res_state = 'Unknown / Unmatched Reference'
-                        pred_action = 'Cannot resolve safely'
-                        unresolved_count += 1
+                        res_state = 'Series Monitored (Issue Pending)'
+                        pred_action = 'Series monitored — issue indexing pending'
+                        unchanged_count += 1
                     else:
                         mylar_iid = iss['IssueID']
                         mylar_ititle = iss['IssueName']
@@ -970,21 +980,84 @@ def execute_entry_action(storyarc_id, issue_arc_id, action, issuesonly=None, ign
             return {'status': 'error', 'message': 'Missing ComicVine Series ID for entry.'}
 
         comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
-        if comic:
-            return {'status': 'info', 'message': f"Series '{sname}' is already monitored."}
-
-        volume_index = {
-            cv_sid: {
-                'NewVol': True,
-                'VolumeName': sname,
-                'VolumeYear': vyear,
-                'IssueIDs': [cv_iid] if cv_iid else []
+        if not comic:
+            volume_index = {
+                cv_sid: {
+                    'NewVol': True,
+                    'VolumeName': sname,
+                    'VolumeYear': vyear,
+                    'IssueIDs': [cv_iid] if cv_iid else []
+                }
             }
-        }
-        _apply_library_mutations(volume_index, [], issuesonly=issuesonly, myDB=myDB)
+            _apply_library_mutations(volume_index, [], issuesonly=issuesonly, myDB=myDB)
+            return {
+                'status': 'success',
+                'message': f"Queued series '{sname} ({vyear})' for addition and Issue #{inum} for download."
+            }
+
+        # Authoritative Reconciliation: Series is already monitored in comics, so reconcile ALL entries in this story arc
+        myDB.action(
+            "UPDATE storyarcs SET Status='Missing' WHERE StoryArcID=? AND ComicID=? AND (Status='Unmonitored' OR Status IS NULL)",
+            [storyarc_id, cv_sid]
+        )
+
+        # Match issues in library (by IssueID or fallback by IssueNumber)
+        arc_entries = myDB.select(
+            "SELECT IssueArcID, IssueID, IssueNumber FROM storyarcs WHERE StoryArcID=? AND ComicID=?",
+            [storyarc_id, cv_sid]
+        )
+        matched_wanted_ids = []
+        for ent in (arc_entries or []):
+            ent_iid = ent['IssueID']
+            ent_num = ent['IssueNumber']
+            matched_iss = None
+            if ent_iid:
+                matched_iss = myDB.selectone("SELECT IssueID, IssueName, Status FROM issues WHERE IssueID=?", [ent_iid]).fetchone()
+                if not matched_iss:
+                    matched_iss = myDB.selectone("SELECT IssueID, IssueName, Status FROM annuals WHERE IssueID=? AND NOT Deleted", [ent_iid]).fetchone()
+            if not matched_iss and ent_num:
+                int_num = int(ent_num) if str(ent_num).isdigit() else -1
+                try:
+                    matched_iss = myDB.selectone(
+                        "SELECT IssueID, IssueName, Status FROM issues WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?)",
+                        [cv_sid, str(ent_num), int_num]
+                    ).fetchone()
+                except Exception:
+                    matched_iss = myDB.selectone(
+                        "SELECT IssueID, IssueName, Status FROM issues WHERE ComicID=? AND Issue_Number=?",
+                        [cv_sid, str(ent_num)]
+                    ).fetchone()
+                if not matched_iss:
+                    try:
+                        matched_iss = myDB.selectone(
+                            "SELECT IssueID, IssueName, Status FROM annuals WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?) AND NOT Deleted",
+                            [cv_sid, str(ent_num), int_num]
+                        ).fetchone()
+                    except Exception:
+                        matched_iss = myDB.selectone(
+                            "SELECT IssueID, IssueName, Status FROM annuals WHERE ComicID=? AND Issue_Number=? AND NOT Deleted",
+                            [cv_sid, str(ent_num)]
+                        ).fetchone()
+
+            if matched_iss:
+                myDB.action(
+                    "UPDATE storyarcs SET IssueID=?, IssueName=?, Status=? WHERE StoryArcID=? AND IssueArcID=?",
+                    [matched_iss['IssueID'], matched_iss['IssueName'], matched_iss['Status'], storyarc_id, ent['IssueArcID']]
+                )
+                if matched_iss['Status'] in ('Skipped', 'Archived') and issuesonly:
+                    myDB.action("UPDATE issues SET Status='Wanted' WHERE IssueID=?", [matched_iss['IssueID']])
+                    matched_wanted_ids.append(matched_iss['IssueID'])
+
+        if matched_wanted_ids:
+            try:
+                from mylar import importer
+                importer.issue_watcher_thread(matched_wanted_ids)
+            except Exception:
+                pass
+
         return {
             'status': 'success',
-            'message': f"Queued series '{sname} ({vyear})' for addition and Issue #{inum} for download."
+            'message': f"Series '{sname}' is monitored. Reconciled Story Arc entries to library."
         }
 
     elif action == 'mark_wanted':
@@ -1008,6 +1081,8 @@ def execute_entry_action(storyarc_id, issue_arc_id, action, issuesonly=None, ign
         else:
             myDB.action("UPDATE issues SET Status='Wanted' WHERE IssueID=?", [cv_iid])
 
+        myDB.action("UPDATE storyarcs SET Status='Wanted' WHERE StoryArcID=? AND (IssueID=? OR IssueArcID=?)", [storyarc_id, cv_iid, issue_arc_id])
+
         try:
             from mylar import importer
             importer.issue_watcher_thread([cv_iid])
@@ -1020,8 +1095,8 @@ def execute_entry_action(storyarc_id, issue_arc_id, action, issuesonly=None, ign
         }
 
     elif action == 'retry_resolution':
-        if not cv_sid or not cv_iid:
-            return {'status': 'error', 'message': 'Entry lacks required ComicVine identifiers.'}
+        if not cv_sid:
+            return {'status': 'error', 'message': 'Entry lacks required ComicVine series identifier.'}
 
         comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
         if not comic:
@@ -1031,23 +1106,40 @@ def execute_entry_action(storyarc_id, issue_arc_id, action, issuesonly=None, ign
                 'message': f"Series '{sname}' is unmonitored."
             }
 
-        iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
-        if not iss:
-            iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+        # Monitored series: update storyarcs entry from Unmonitored to Missing
+        myDB.action(
+            "UPDATE storyarcs SET Status='Missing' WHERE StoryArcID=? AND ComicID=? AND (Status='Unmonitored' OR Status IS NULL)",
+            [storyarc_id, cv_sid]
+        )
+
+        iss = None
+        if cv_iid:
+            iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM issues WHERE IssueID=?", [cv_iid]).fetchone()
+            if not iss:
+                iss = myDB.selectone("SELECT IssueID, IssueName, Status, Location FROM annuals WHERE IssueID=? AND NOT Deleted", [cv_iid]).fetchone()
+
+        if not iss and inum:
+            int_num = int(inum) if str(inum).isdigit() else -1
+            iss = myDB.selectone(
+                "SELECT IssueID, IssueName, Status, Location FROM issues WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?)",
+                [cv_sid, str(inum), int_num]
+            ).fetchone()
+            if not iss:
+                iss = myDB.selectone(
+                    "SELECT IssueID, IssueName, Status, Location FROM annuals WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?) AND NOT Deleted",
+                    [cv_sid, str(inum), int_num]
+                ).fetchone()
 
         if not iss:
             return {
                 'status': 'success',
-                'resolution_state': 'Unknown / Unmatched Reference',
-                'message': f"Series monitored, but issue {cv_iid} not yet indexed."
+                'resolution_state': 'Series Monitored (Issue Pending)',
+                'message': f"Series '{sname}' is monitored; issue #{inum} indexing pending."
             }
 
         res_state = 'Downloaded' if (iss['Status'] == 'Downloaded' and iss['Location'] and iss['Location'] != 'None') else 'Missing (Monitored)'
-        if iss['IssueName']:
-            try:
-                myDB.action("UPDATE storyarcs SET IssueName=? WHERE StoryArcID=? AND IssueID=?", [iss['IssueName'], storyarc_id, cv_iid])
-            except Exception:
-                pass
+        myDB.action("UPDATE storyarcs SET IssueID=?, IssueName=?, Status=? WHERE StoryArcID=? AND (IssueArcID=? OR IssueID=?)",
+                    [iss['IssueID'], iss['IssueName'], iss['Status'], storyarc_id, issue_arc_id, cv_iid or iss['IssueID']])
 
         return {
             'status': 'success',

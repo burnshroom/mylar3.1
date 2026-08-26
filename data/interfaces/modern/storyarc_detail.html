@@ -165,7 +165,7 @@
                                     status_class = 'badge-status-unmatched'
                                     if res_state == 'Downloaded':
                                         status_class = 'badge-status-downloaded'
-                                    elif res_state in ('Monitored but not downloaded', 'Missing (Monitored)'):
+                                    elif res_state in ('Monitored but not downloaded', 'Missing (Monitored)', 'Series Monitored (Issue Pending)', 'Missing (Wanted)'):
                                         status_class = 'badge-status-monitored'
                                     elif res_state in ('Unmonitored series', 'Unmonitored Series'):
                                         status_class = 'badge-status-unmonitored'
@@ -260,7 +260,7 @@
                         status_class = 'badge-status-unmatched'
                         if res_state == 'Downloaded':
                             status_class = 'badge-status-downloaded'
-                        elif res_state in ('Monitored but not downloaded', 'Missing (Monitored)'):
+                        elif res_state in ('Monitored but not downloaded', 'Missing (Monitored)', 'Series Monitored (Issue Pending)', 'Missing (Wanted)'):
                             status_class = 'badge-status-monitored'
                         elif res_state in ('Unmonitored series', 'Unmonitored Series'):
                             status_class = 'badge-status-unmonitored'

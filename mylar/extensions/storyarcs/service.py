@@ -216,58 +216,90 @@ def get_storyarc_detail(storyarc_id, storyarc_name=None, cv_arc_id=None, myDB=No
         res_state = 'Unknown / Unmatched Reference'
         is_downloaded = False
         is_monitored = False
+        is_series_monitored = False
         mylar_loc = None
         issue_title = _row_val(al, 'IssueName') or ''
 
+        # 1. Authoritative series check
+        comic = None
+        if sid:
+            comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [sid]).fetchone()
+            if comic:
+                is_series_monitored = True
+
+        # 2. Authoritative issue check
+        iss = None
         if iid:
             iss = myDB.selectone("SELECT IssueID, ComicID, IssueName, Status, Location, IssueDate, ReleaseDate FROM issues WHERE IssueID=?", [iid]).fetchone()
             if not iss:
                 iss = myDB.selectone("SELECT IssueID, ComicID, IssueName, Status, Location, IssueDate, ReleaseDate FROM annuals WHERE IssueID=? AND NOT Deleted", [iid]).fetchone()
 
-            if iss:
-                is_monitored = True
-                if not issue_title and _row_val(iss, 'IssueName'):
-                    issue_title = _row_val(iss, 'IssueName')
+        # 3. Fallback: match by (ComicID, IssueNumber) if IssueID not yet resolved
+        if not iss and sid and inum:
+            int_num = int(inum) if str(inum).isdigit() else -1
+            try:
+                iss = myDB.selectone(
+                    "SELECT IssueID, ComicID, IssueName, Status, Location, IssueDate, ReleaseDate FROM issues WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?)",
+                    [sid, str(inum), int_num]
+                ).fetchone()
+            except Exception:
+                iss = myDB.selectone(
+                    "SELECT IssueID, ComicID, IssueName, Status, Location, IssueDate, ReleaseDate FROM issues WHERE ComicID=? AND Issue_Number=?",
+                    [sid, str(inum)]
+                ).fetchone()
+            if not iss:
+                try:
+                    iss = myDB.selectone(
+                        "SELECT IssueID, ComicID, IssueName, Status, Location, IssueDate, ReleaseDate FROM annuals WHERE ComicID=? AND (Issue_Number=? OR Int_IssueNumber=?) AND NOT Deleted",
+                        [sid, str(inum), int_num]
+                    ).fetchone()
+                except Exception:
+                    iss = myDB.selectone(
+                        "SELECT IssueID, ComicID, IssueName, Status, Location, IssueDate, ReleaseDate FROM annuals WHERE ComicID=? AND Issue_Number=? AND NOT Deleted",
+                        [sid, str(inum)]
+                    ).fetchone()
+            if iss and not iid:
+                iid = iss['IssueID']
+                al_dict['IssueID'] = iid
 
-                if not issue_date:
-                    issue_date = _clean_date(_row_val(iss, 'IssueDate'))
-                if not release_date:
-                    release_date = _clean_date(_row_val(iss, 'ReleaseDate'))
+        if iss:
+            is_monitored = True
+            if not issue_title and _row_val(iss, 'IssueName'):
+                issue_title = _row_val(iss, 'IssueName')
 
-                if _row_val(iss, 'Status') == 'Downloaded' and _row_val(iss, 'Location') and _row_val(iss, 'Location') != 'None':
-                    res_state = 'Downloaded'
-                    is_downloaded = True
+            if not issue_date:
+                issue_date = _clean_date(_row_val(iss, 'IssueDate'))
+            if not release_date:
+                release_date = _clean_date(_row_val(iss, 'ReleaseDate'))
+
+            if _row_val(iss, 'Status') == 'Downloaded' and _row_val(iss, 'Location') and _row_val(iss, 'Location') != 'None':
+                res_state = 'Downloaded'
+                is_downloaded = True
+                have_count += 1
+                mylar_loc = _row_val(iss, 'Location')
+            else:
+                res_state = 'Missing (Monitored)'
+                if arc_issue_status == 'Downloaded':
                     have_count += 1
-                    mylar_loc = _row_val(iss, 'Location')
-                else:
-                    res_state = 'Missing (Monitored)'
-                    if arc_issue_status == 'Downloaded':
-                        have_count += 1
-                        is_downloaded = True
-            elif sid:
-                comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [sid]).fetchone()
-                if comic:
-                    res_state = 'Unknown / Unmatched Reference'
-                else:
-                    res_state = 'Unmonitored Series'
-            else:
-                res_state = 'Unknown / Unmatched Reference'
+                    is_downloaded = True
+        elif is_series_monitored:
+            # Series is monitored in library, but this specific issue has not been indexed yet
+            is_monitored = True
+            res_state = 'Series Monitored (Issue Pending)'
         elif sid:
-            comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [sid]).fetchone()
-            if comic:
-                res_state = 'Unknown / Unmatched Reference'
-            else:
-                res_state = 'Unmonitored Series'
+            is_monitored = False
+            res_state = 'Unmonitored Series'
         else:
+            is_monitored = False
             res_state = 'Unknown / Unmatched Reference'
 
         if not store_date:
             store_date = release_date or issue_date
 
         iss_status_val = _row_val(iss, 'Status') if iss else None
-        is_unmonitored = (sid is not None and not is_monitored)
-        can_mark_wanted = bool(is_monitored and iss_status_val in ('Skipped', 'Archived', 'Ignored', 'Wanted', 'Loading'))
-        can_add_series = bool(is_unmonitored and sid)
+        is_unmonitored = not is_series_monitored and (sid is not None)
+        can_mark_wanted = bool(iss and iss_status_val in ('Skipped', 'Archived', 'Ignored', 'Wanted', 'Loading'))
+        can_add_series = bool(not is_series_monitored and sid)
 
         al_dict['ReadingOrder'] = order
         al_dict['StoreDate'] = store_date

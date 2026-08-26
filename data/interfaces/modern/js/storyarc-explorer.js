@@ -26,7 +26,7 @@
     var isRefreshingCatalog = false;
 
     function getCsrfToken() {
-        return $('#cbl_csrf_token').val() || $('meta[name="csrf-token"]').attr('content') || '';
+        return $('#cbl_csrf_token').val() || $('meta[name="csrf-token"]').attr('content') || (pageConfig && pageConfig.cbl_csrf_token) || '';
     }
 
     $.ajaxSetup({
@@ -124,11 +124,15 @@
         if (!files || files.length === 0) return;
         var file = files[0];
         var opts = getImportOptions();
+        var token = getCsrfToken();
         var formData = new FormData();
         formData.append('cbl_file', file);
         formData.append('import_mode', opts.import_mode);
         formData.append('issuesonly', opts.issuesonly);
         formData.append('ignorearchived', opts.ignorearchived);
+        if (token) {
+            formData.append('csrf_token', token);
+        }
 
         $('#dropzoneText').html('Uploading & validating <strong>' + file.name + '</strong>...');
         $('#modalAlertBox').hide();
@@ -143,6 +147,7 @@
             data: formData,
             processData: false,
             contentType: false,
+            headers: token ? { 'X-CSRF-Token': token } : {},
             dataType: 'json',
             success: function(resp) {
                 $('#dropzoneText').html('Drag and drop a <strong>.cbl</strong> or <strong>.xml</strong> file here, or <span class="dropzone-link">browse</span>');
@@ -161,12 +166,20 @@
                         .show();
                 }
             },
-            error: function() {
+            error: function(xhr) {
                 $('#dropzoneText').html('Drag and drop a <strong>.cbl</strong> or <strong>.xml</strong> file here, or <span class="dropzone-link">browse</span>');
+                var errMsg = 'Failed to upload CBL file to server.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg = xhr.responseJSON.message;
+                } else if (xhr.status === 403) {
+                    errMsg = 'CSRF verification failed or session expired. Please refresh the page.';
+                } else if (xhr.status === 413) {
+                    errMsg = 'Uploaded file exceeds the maximum allowed size (5MB).';
+                }
                 $('#modalAlertBox')
                     .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
                     .addClass('modal-alert-error')
-                    .text('Failed to upload CBL file to server.')
+                    .text(errMsg)
                     .show();
             }
         });
@@ -384,16 +397,21 @@
     function confirmCblImport() {
         if (!currentToken) return;
 
+        var token = getCsrfToken();
         $('#confirmImportBtn').prop('disabled', true).text('Importing & Reconciling...');
         $('#modalAlertBox').hide();
 
         var params = getImportOptions();
         params.token = currentToken;
+        if (token) {
+            params.csrf_token = token;
+        }
 
         $.ajax({
             url: 'cbl_confirm_import',
             type: 'POST',
             data: params,
+            headers: token ? { 'X-CSRF-Token': token } : {},
             dataType: 'json',
             success: function(resp) {
                 if (resp.status === 'success') {
@@ -421,12 +439,18 @@
                         .show();
                 }
             },
-            error: function() {
+            error: function(xhr) {
                 $('#confirmImportBtn').prop('disabled', false).text('Confirm & Apply to Library');
+                var errMsg = 'Error communicating with server during import.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg = xhr.responseJSON.message;
+                } else if (xhr.status === 403) {
+                    errMsg = 'CSRF verification failed or session expired. Please refresh the page.';
+                }
                 $('#modalAlertBox')
                     .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
                     .addClass('modal-alert-error')
-                    .text('Error communicating with server during import.')
+                    .text(errMsg)
                     .show();
             }
         });
@@ -482,6 +506,7 @@
         if (isRefreshingCatalog) return;
         isRefreshingCatalog = true;
 
+        var token = getCsrfToken();
         var refreshBtn = $('#refreshCatalogBtn');
         refreshBtn.prop('disabled', true).html('Refreshing from GitHub...');
         $('#modalAlertBox').hide();
@@ -489,6 +514,8 @@
         $.ajax({
             url: 'cbl_catalog_refresh',
             type: 'POST',
+            data: token ? { csrf_token: token } : {},
+            headers: token ? { 'X-CSRF-Token': token } : {},
             dataType: 'json',
             success: function(resp) {
                 isRefreshingCatalog = false;
@@ -509,16 +536,22 @@
                     loadCatalogStatus(false);
                 }
             },
-            error: function() {
+            error: function(xhr) {
                 isRefreshingCatalog = false;
                 refreshBtn.prop('disabled', false).html(
                     '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
                     '<path d="M1 4v4h4"></path><path d="M3.51 10a5 5 0 1 0 1.1-5.5L1 8"></path></svg> Refresh DieselTech Catalog'
                 );
+                var errMsg = 'Network error communicating with server during catalog refresh.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg = xhr.responseJSON.message;
+                } else if (xhr.status === 403) {
+                    errMsg = 'CSRF verification failed or session expired. Please refresh the page.';
+                }
                 $('#modalAlertBox')
                     .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
                     .addClass('modal-alert-error')
-                    .text('Network error communicating with server during catalog refresh.')
+                    .text(errMsg)
                     .show();
                 loadCatalogStatus(false);
             }
@@ -697,12 +730,18 @@
     function confirmDeleteStoryArc() {
         var arcId = pageConfig.storyarcid || $('#page_storyarcid').val() || '';
         if (!arcId) return;
+
+        var token = getCsrfToken();
         $('#confirmDeleteArcBtn').prop('disabled', true).text('Deleting...');
 
         $.ajax({
             url: 'cbl_delete_arc',
             type: 'POST',
-            data: { storyarcid: arcId },
+            data: {
+                storyarcid: arcId,
+                csrf_token: token
+            },
+            headers: token ? { 'X-CSRF-Token': token } : {},
             dataType: 'json',
             success: function(resp) {
                 if (resp.status === 'success') {
@@ -716,12 +755,18 @@
                         .show();
                 }
             },
-            error: function() {
+            error: function(xhr) {
                 $('#confirmDeleteArcBtn').prop('disabled', false).text('Delete Story Arc');
+                var errMsg = 'Error communicating with server.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg = xhr.responseJSON.message;
+                } else if (xhr.status === 403) {
+                    errMsg = 'CSRF verification failed or session expired. Please refresh the page.';
+                }
                 $('#deleteModalAlert')
                     .removeClass('modal-alert-success')
                     .addClass('modal-alert-error')
-                    .text('Error communicating with server.')
+                    .text(errMsg)
                     .show();
             }
         });
@@ -836,6 +881,7 @@
     function applyArcReconciliation() {
         if (!currentReconcileArcId) return;
 
+        var token = getCsrfToken();
         var issuesOnly = $('#detailIssuesOnly').is(':checked');
         var ignoreArchived = $('#detailIgnoreArchived').is(':checked');
 
@@ -849,8 +895,10 @@
                 apply: 'true',
                 import_mode: 'apply_library',
                 issuesonly: issuesOnly ? 'true' : 'false',
-                ignorearchived: ignoreArchived ? 'true' : 'false'
+                ignorearchived: ignoreArchived ? 'true' : 'false',
+                csrf_token: token
             },
+            headers: token ? { 'X-CSRF-Token': token } : {},
             dataType: 'json',
             success: function(resp) {
                 if (resp.status === 'success') {
@@ -861,7 +909,7 @@
                         .show();
                     setTimeout(function() {
                         window.location.reload();
-                    }, 900);
+                    }, 800);
                 } else {
                     $('#confirmReconcileBtn').prop('disabled', false).text('Apply Library Changes');
                     $('#detailReconAlert')
@@ -871,12 +919,18 @@
                         .show();
                 }
             },
-            error: function() {
+            error: function(xhr) {
                 $('#confirmReconcileBtn').prop('disabled', false).text('Apply Library Changes');
+                var errMsg = 'Error communicating with server during reconciliation.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg = xhr.responseJSON.message;
+                } else if (xhr.status === 403) {
+                    errMsg = 'CSRF verification failed or session expired. Please refresh the page.';
+                }
                 $('#detailReconAlert')
                     .removeClass('modal-alert-success modal-alert-info')
                     .addClass('modal-alert-error')
-                    .text('Error communicating with server during reconciliation.')
+                    .text(errMsg)
                     .show();
             }
         });
@@ -886,6 +940,7 @@
         var aid = arcId || pageConfig.storyarcid || $('#page_storyarcid').val();
         if (!aid || !issueArcId || !action) return;
 
+        var token = getCsrfToken();
         var rowId = '#arcRow_' + issueArcId;
         var badgeId = '#statusBadge_' + issueArcId;
 
@@ -897,27 +952,23 @@
             data: {
                 storyarcid: aid,
                 issue_arc_id: issueArcId,
-                action: action
+                action: action,
+                csrf_token: token
             },
+            headers: token ? { 'X-CSRF-Token': token } : {},
             dataType: 'json',
             success: function(resp) {
                 if (resp.status === 'success') {
                     $('#arcActionAlertBox')
                         .removeClass('modal-alert-error modal-alert-warning modal-alert-info')
                         .addClass('modal-alert-success')
-                        .html('<strong>Action Completed:</strong> ' + resp.message)
+                        .html('<strong>Action Completed:</strong> ' + (resp.message || 'Updated.'))
                         .slideDown(150);
 
-                    if (resp.resolution_state) {
-                        var statusClass = 'badge-status-unmatched';
-                        if (resp.resolution_state === 'Downloaded') statusClass = 'badge-status-downloaded';
-                        else if (resp.resolution_state.indexOf('Monitored') !== -1) statusClass = 'badge-status-monitored';
-                        else if (resp.resolution_state.indexOf('Unmonitored') !== -1) statusClass = 'badge-status-unmonitored';
-
-                        $(badgeId).attr('class', 'badge-status ' + statusClass).text(resp.resolution_state);
-                    } else if (action === 'mark_wanted') {
-                        $(badgeId).attr('class', 'badge-status badge-status-monitored').text('Missing (Monitored)');
-                    }
+                    // Client refresh: derive visible state directly from fresh server data
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 500);
                 } else if (resp.status === 'info') {
                     $('#arcActionAlertBox')
                         .removeClass('modal-alert-error modal-alert-warning modal-alert-success')
@@ -932,11 +983,17 @@
                         .slideDown(150);
                 }
             },
-            error: function() {
+            error: function(xhr) {
+                var errMsg = 'Failed to execute action on server.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errMsg = xhr.responseJSON.message;
+                } else if (xhr.status === 403) {
+                    errMsg = 'CSRF verification failed or session expired. Please refresh the page.';
+                }
                 $('#arcActionAlertBox')
                     .removeClass('modal-alert-success modal-alert-warning modal-alert-info')
                     .addClass('modal-alert-error')
-                    .html('<strong>Error:</strong> Failed to execute action on server.')
+                    .html('<strong>Error:</strong> ' + errMsg)
                     .slideDown(150);
             }
         });

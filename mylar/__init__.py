@@ -1658,6 +1658,12 @@ def dbcheck():
             c.execute("UPDATE rssdb SET site = 'DDL(GetComics)' WHERE site = 'DDL'")
             c.execute("UPDATE ddl_info SET site = 'DDL(GetComics)' WHERE site is NULL")
 
+    try:
+        from mylar.extensions.migrations import run_extension_migrations
+        run_extension_migrations(c)
+    except Exception as em_err:
+        logger.warn(f"Unable to apply extension migrations during initialize: {em_err}")
+
     conn.commit()
     c.close()
     conn.close()

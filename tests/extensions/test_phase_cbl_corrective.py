@@ -597,8 +597,8 @@ class TestPhaseCBLCorrectiveComprehensive(unittest.TestCase):
         self.cursor.execute("INSERT INTO comics VALUES ('5001', 'The New Titans', '1988', 'Active')")
         self.conn.commit()
         res_add_repeat = cbl_service.execute_entry_action(arc_id, f'{arc_id}_1', 'add_series', myDB=self.myDB)
-        self.assertEqual(res_add_repeat['status'], 'info')
-        self.assertIn('already monitored', res_add_repeat['message'])
+        self.assertEqual(res_add_repeat['status'], 'success')
+        self.assertIn('monitored', res_add_repeat['message'])
 
         # Action: mark_wanted
         self.cursor.execute("INSERT INTO issues VALUES ('60', '5001', 'Part 2', '60', 'Skipped', 'None', '1989-10-15', '1989-10-15')")

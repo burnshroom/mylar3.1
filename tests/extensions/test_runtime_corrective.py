@@ -55,6 +55,25 @@ class DummyConfig:
 class TestRuntimeCorrective(unittest.TestCase):
 
     def setUp(self):
+        import tempfile
+        import sqlite3
+        self.test_dir = tempfile.mkdtemp()
+        mylar.DATA_DIR = self.test_dir
+        self.db_path = os.path.join(self.test_dir, 'mylar.db')
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute('''CREATE TABLE IF NOT EXISTS storyarcs (
+            StoryArcID TEXT, StoryArc TEXT, ReadingOrder INTEGER, ComicID TEXT,
+            IssueID TEXT, ComicName TEXT, Issue_Number TEXT, Status TEXT
+        )''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS storyarc_manifests (
+            StoryArcID TEXT PRIMARY KEY, StoryArcName TEXT, SourceType TEXT,
+            SourceName TEXT, RepoURL TEXT, RepoPath TEXT, RepoCommit TEXT,
+            FileHash TEXT, TotalEntries INTEGER, ImportTime TEXT, RawManifest BLOB
+        )''')
+        conn.commit()
+        conn.close()
+
         mylar.CONFIG = DummyConfig()
         mylar.GLOBAL_MESSAGES = []
         mylar.SSE_KEY = 'test_sse_key'
@@ -62,6 +81,12 @@ class TestRuntimeCorrective(unittest.TestCase):
         mylar.CURRENT_VERSION = None
         mylar.CURRENT_VERSION_NAME = "v3.1.0"
         mylar.PROG_DIR = REPO_ROOT
+
+    def tearDown(self):
+        import shutil
+        if hasattr(self, 'test_dir') and os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir, ignore_errors=True)
+
 
     def test_01_no_modern_templates_contain_mylar_extensions(self):
         """Verify no template in data/interfaces/modern/ references mylar.extensions directly."""
@@ -243,6 +268,70 @@ class TestRuntimeCorrective(unittest.TestCase):
 
         self.assertIn('vcs_ref=${{ github.sha }}', wf)
         self.assertIn('VCS_REF=${{ steps.vars.outputs.vcs_ref }}', wf)
+
+    def test_11_audit_exact_webserve_controller_route_path(self):
+        """
+        Audit exact real execution paths:
+          webserve.storyarc_main -> handle_storyarc_main -> serve_template -> storyarc.html
+          webserve.detailStoryArc -> handle_detail_storyarc -> serve_template -> storyarc_detail.html
+        Proves no NameError: name 'mylar' is not defined occurs when calling webserve routes directly.
+        """
+        from mylar.webserve import WebInterface
+        interface = WebInterface()
+
+        # 1. Exercise webserve.storyarc_main
+        main_html = interface.storyarc_main()
+        if isinstance(main_html, bytes):
+            main_html = main_html.decode('utf-8')
+        self.assertNotIn("500 Internal Server Error", main_html)
+        self.assertNotIn("NameError", main_html)
+        self.assertNotIn("AttributeError", main_html)
+        self.assertIn('id="page_name" value="storyarc"', main_html)
+        self.assertIn('id="cbl_csrf_token"', main_html)
+
+        # 2. Exercise webserve.detailStoryArc with mock storyarc data
+        with patch('mylar.extensions.storyarcs.service.get_storyarc_detail') as mock_get_detail:
+            mock_get_detail.return_value = {
+                'template': 'storyarc_detail.html',
+                'storyarcname': 'Test Story Arc',
+                'storyarcid': 'arc_audit_101',
+                'cvarcid': '5555',
+                'sdir': '/comics/Test',
+                'arcdetail': {'publisher': 'Marvel', 'totalissues': 2},
+                'storyarcbanner': None,
+                'bannerheight': '280',
+                'bannerwidth': '960',
+                'manifest': {'SourceType': 'upload', 'SourceName': 'test.cbl'},
+                'have_count': 1,
+                'total_count': 2,
+                'percent': 50,
+                'spanyears': '2021',
+                'publisher': 'Marvel',
+                'readlist': [{
+                    'StoryArcID': 'arc_audit_101',
+                    'StoryArc': 'Test Story Arc',
+                    'ReadingOrder': 1,
+                    'ComicID': '101',
+                    'IssueID': '201',
+                    'ComicName': 'X-Men',
+                    'SeriesYear': '2021',
+                    'IssueNumber': '1',
+                    'IssueName': 'Part 1',
+                    'StoreDate': '2021-01-01',
+                    'Status': 'Downloaded',
+                    'ResolutionState': 'Downloaded',
+                    'IsMonitored': True
+                }],
+                'found': True
+            }
+            detail_html = interface.detailStoryArc(StoryArcID='arc_audit_101')
+            if isinstance(detail_html, bytes):
+                detail_html = detail_html.decode('utf-8')
+            self.assertNotIn("500 Internal Server Error", detail_html)
+            self.assertNotIn("NameError", detail_html)
+            self.assertNotIn("AttributeError", detail_html)
+            self.assertIn('id="page_name" value="storyarc_detail"', detail_html)
+            self.assertIn('id="deleteArcModal"', detail_html)
 
 
 if __name__ == '__main__':

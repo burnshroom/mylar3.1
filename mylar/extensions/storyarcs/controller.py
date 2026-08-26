@@ -83,16 +83,12 @@ def handle_storyarc_main(arcid=None, serve_template_fn=None, **kwargs):
     if arcid is None:
         if serve_template_fn:
             csrf_token = get_or_create_cbl_csrf_token()
-            cbl_issues_only = getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
-            cbl_ignore_archived = getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else False
             return serve_template_fn(
                 templatename="storyarc.html",
                 title="Story Arcs",
                 arclist=arclist,
                 delete_type=0,
                 cbl_csrf_token=csrf_token,
-                cbl_issues_only=cbl_issues_only,
-                cbl_ignore_archived=cbl_ignore_archived,
                 **kwargs
             )
         return arclist
@@ -108,8 +104,6 @@ def handle_detail_storyarc(StoryArcID, StoryArcName=None, CV_ArcID=None, serve_t
     detail = service.get_storyarc_detail(StoryArcID, storyarc_name=StoryArcName, cv_arc_id=CV_ArcID)
     if serve_template_fn:
         csrf_token = get_or_create_cbl_csrf_token()
-        cbl_issues_only = getattr(mylar.CONFIG, 'CBL_IMPORT_ISSUESONLY', True) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else True
-        cbl_ignore_archived = getattr(mylar.CONFIG, 'CBL_IMPORT_IGNOREARCHIVED', False) if hasattr(mylar, 'CONFIG') and mylar.CONFIG else False
         return serve_template_fn(
             templatename=detail.get('template', 'storyarc_detail.html'),
             title=f"Story Arc - {detail['storyarcname']}" if detail.get('found') else "Detailed Arc list",
@@ -129,8 +123,6 @@ def handle_detail_storyarc(StoryArcID, StoryArcName=None, CV_ArcID=None, serve_t
             spanyears=detail.get('spanyears'),
             publisher=detail.get('publisher', 'Unknown'),
             cbl_csrf_token=csrf_token,
-            cbl_issues_only=cbl_issues_only,
-            cbl_ignore_archived=cbl_ignore_archived,
             **kwargs
         )
     return detail
