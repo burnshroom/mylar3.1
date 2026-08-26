@@ -979,8 +979,30 @@ def execute_entry_action(storyarc_id, issue_arc_id, action, issuesonly=None, ign
         if not cv_sid:
             return {'status': 'error', 'message': 'Missing ComicVine Series ID for entry.'}
 
-        comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
-        if not comic:
+        try:
+            comic = myDB.selectone("SELECT ComicID, ComicName, Status, ComicLocation FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
+        except Exception:
+            try:
+                comic = myDB.selectone("SELECT ComicID, ComicName, Status FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
+            except Exception:
+                comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [cv_sid]).fetchone()
+        is_stale_placeholder = False
+        if comic:
+            status_val = comic['Status']
+            com_loc = comic['ComicLocation']
+            comic_name = comic['ComicName'] or ''
+            if status_val in ('Loading', 'Failed'):
+                if not com_loc or com_loc == 'None' or comic_name.startswith('Comic ID:') or comic_name.startswith('Failed import:'):
+                    is_in_queue = False
+                    if hasattr(mylar, 'ADD_LIST') and mylar.ADD_LIST is not None:
+                        try:
+                            is_in_queue = any(isinstance(item, dict) and str(item.get('comicid')) == str(cv_sid) for item in list(mylar.ADD_LIST.queue))
+                        except Exception:
+                            is_in_queue = False
+                    if not is_in_queue:
+                        is_stale_placeholder = True
+
+        if not comic or is_stale_placeholder:
             volume_index = {
                 cv_sid: {
                     'NewVol': True,
@@ -990,9 +1012,10 @@ def execute_entry_action(storyarc_id, issue_arc_id, action, issuesonly=None, ign
                 }
             }
             _apply_library_mutations(volume_index, [], issuesonly=issuesonly, myDB=myDB)
+            action_desc = "Recovered stale placeholder and queued" if is_stale_placeholder else "Queued"
             return {
                 'status': 'success',
-                'message': f"Queued series '{sname} ({vyear})' for addition and Issue #{inum} for download."
+                'message': f"{action_desc} series '{sname} ({vyear})' for addition and Issue #{inum} for download."
             }
 
         # Authoritative Reconciliation: Series is already monitored in comics, so reconcile ALL entries in this story arc

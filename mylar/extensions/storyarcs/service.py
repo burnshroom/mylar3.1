@@ -223,9 +223,30 @@ def get_storyarc_detail(storyarc_id, storyarc_name=None, cv_arc_id=None, myDB=No
         # 1. Authoritative series check
         comic = None
         if sid:
-            comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [sid]).fetchone()
+            try:
+                comic = myDB.selectone("SELECT ComicID, ComicName, Status, ComicLocation FROM comics WHERE ComicID=?", [sid]).fetchone()
+            except Exception:
+                try:
+                    comic = myDB.selectone("SELECT ComicID, ComicName, Status FROM comics WHERE ComicID=?", [sid]).fetchone()
+                except Exception:
+                    comic = myDB.selectone("SELECT ComicID, ComicName FROM comics WHERE ComicID=?", [sid]).fetchone()
             if comic:
-                is_series_monitored = True
+                status_val = comic['Status']
+                com_loc = comic['ComicLocation']
+                comic_name = comic['ComicName'] or ''
+                is_stale_placeholder = False
+                if status_val in ('Loading', 'Failed'):
+                    if not com_loc or com_loc == 'None' or comic_name.startswith('Comic ID:') or comic_name.startswith('Failed import:'):
+                        is_in_queue = False
+                        if hasattr(mylar, 'ADD_LIST') and mylar.ADD_LIST is not None:
+                            try:
+                                is_in_queue = any(isinstance(item, dict) and str(item.get('comicid')) == str(sid) for item in list(mylar.ADD_LIST.queue))
+                            except Exception:
+                                is_in_queue = False
+                        if not is_in_queue:
+                            is_stale_placeholder = True
+                if not is_stale_placeholder:
+                    is_series_monitored = True
 
         # 2. Authoritative issue check
         iss = None

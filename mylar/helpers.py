@@ -1235,6 +1235,13 @@ def havetotals(refreshit=None, start_char_filter=None):
 
 def filesafe(comic):
     import unicodedata
+    if not comic or not isinstance(comic, (str, bytes)):
+        return ""
+    if isinstance(comic, bytes):
+        try:
+            comic = comic.decode('utf-8')
+        except Exception:
+            comic = comic.decode('latin-1', errors='ignore')
     if '\u2014' in comic:
         comic = re.sub('\u2014', ' - ', comic)
     try:
@@ -1250,6 +1257,8 @@ def filesafe(comic):
     else:
         comicname_filesafe = re.sub(r'[\:\'\"\,\?\!\\]', '', u_comic.decode('utf-8'))
         comicname_filesafe = re.sub(r'[\/\*]', '-', comicname_filesafe)
+
+    return comicname_filesafe
 
 def resolve_issue_file(comic_location, issue_location):
     """

@@ -84,11 +84,20 @@ class FileHandlers(object):
             enforce_format = False
             folder_format = mylar.CONFIG.FOLDER_FORMAT
 
-        if folder_format is None:
+        if folder_format is None or not folder_format.strip():
             folder_format = '$Series ($Year)'
 
-        publisher = re.sub('!', '', self.comic['ComicPublisher']) # thanks Boom!
+        if not hasattr(self, 'comic') or not self.comic:
+            logger.error('[FILERS] No comic data provided to folder_create')
+            return None
+
+        pub_raw = self.comic.get('ComicPublisher') or ''
+        publisher = re.sub('!', '', str(pub_raw)) # thanks Boom!
         publisher = helpers.filesafe(publisher)
+        if publisher:
+            publisher = publisher.rstrip('.').strip()
+        else:
+            publisher = ''
 
         if mylar.OS_DETECT == 'Windows':
             if '/' in folder_format:
@@ -97,28 +106,24 @@ class FileHandlers(object):
             if '\\' in folder_format:
                 folder_format = folder_format.replace('\\', '/').strip()
 
-        if publisher is not None:
-            if publisher.endswith('.'):
-                publisher = publisher[:-1]
+        u_comicnm = self.comic.get('ComicName')
+        if not u_comicnm or not str(u_comicnm).strip():
+            logger.error('[FILERS] Missing or empty ComicName provided for folder creation.')
+            return None
 
-        u_comicnm = self.comic['ComicName']
         # let's remove the non-standard characters here that will break filenaming / searching.
         comicname_filesafe = helpers.filesafe(u_comicnm)
-        comicdir = comicname_filesafe
+        if not comicname_filesafe or not comicname_filesafe.strip():
+            logger.error('[FILERS] Sanitized ComicName is empty for "%s"' % u_comicnm)
+            return None
 
-        series = comicdir
-        if any([series.endswith('.'), series.endswith('..'), series.endswith('...'), series.endswith('....')]):
-            if series.endswith('....'):
-                series = series[:-4]
-            elif series.endswith('...'):
-                series = series[:-3]
-            elif series.endswith('..'):
-                series = series[:-2]
-            elif series.endswith('.'):
-                series = series[:-1]
+        series = comicname_filesafe.rstrip('.').strip()
+        if not series:
+            logger.error('[FILERS] Series name became empty after sanitizing trailing periods: "%s"' % u_comicnm)
+            return None
 
         if booktype is not None:
-            if self.comic['Corrected_Type'] is not None:
+            if self.comic.get('Corrected_Type') is not None:
                 if self.comic['Corrected_Type'] != booktype:
                     booktype = booktype
                 else:
@@ -126,7 +131,7 @@ class FileHandlers(object):
             else:
                 booktype = booktype
         else:
-            booktype = self.comic['Type']
+            booktype = self.comic.get('Type')
 
         if any([booktype is None, booktype == 'None', booktype == 'Print']) or all([booktype != 'Print', mylar.CONFIG.FORMAT_BOOKTYPE is False]):
             chunk_fb = re.sub(r'\$Type', '', folder_format)
@@ -137,28 +142,25 @@ class FileHandlers(object):
         else:
             chunk_folder_format = folder_format
 
-        if self.comic['ComicVersion'] is None:
+        raw_vol = self.comic.get('ComicVersion')
+        if raw_vol is None or str(raw_vol).strip() in ('', 'None', 'none', 'null', 'Null'):
             comicVol = 'None'
         else:
-            if booktype != 'Print':
-                comicVol = self.comic['ComicVersion']
-            else:
-                comicVol = self.comic['ComicVersion']
-            if comicVol is None:
-                comicVol = 'None'
+            comicVol = str(raw_vol).strip()
 
-        #if comversion is None, remove it so it doesn't populate with 'None'
+        # if comversion is None, remove it so it doesn't populate with 'None'
         if comicVol == 'None':
             chunk_f_f = re.sub(r'\$VolumeN', '', chunk_folder_format)
             chunk_f = re.compile(r'\s+')
             chunk_folder_format = chunk_f.sub(' ', chunk_f_f)
 
-        if any([imprint is None, imprint == 'None']):
-            imprint = self.comic['PublisherImprint']
-        if any([imprint is None, imprint == 'None']):
+        if any([imprint is None, imprint == 'None', imprint == '']):
+            imprint = self.comic.get('PublisherImprint')
+        if any([imprint is None, imprint == 'None', imprint == '']):
             chunk_f_f = re.sub(r'\$Imprint', '', chunk_folder_format)
             chunk_f = re.compile(r'\s+')
             chunk_folder_format = chunk_f.sub(' ', chunk_f_f)
+            imprint = ''
 
         chunk_folder_format = re.sub(r'\(\)|\[\]', '', chunk_folder_format).strip()
         ccf = chunk_folder_format.find('/ ')
@@ -176,19 +178,16 @@ class FileHandlers(object):
 
         chunk_folder_format = re.sub(r'\s+', ' ', chunk_folder_format)
 
-        # if the path contains // in linux it will incorrectly parse things out.
-        #logger.fdebug('newPath: %s' % re.sub('//', '/', chunk_folder_format).strip())
-
-        #do work to generate folder path
+        # do work to generate folder path
         values = {'$Series':        series,
                   '$Publisher':     publisher,
-                  '$Imprint':       imprint,
-                  '$Year':          self.comic['ComicYear'],
+                  '$Imprint':       imprint or '',
+                  '$Year':          str(self.comic.get('ComicYear') or ''),
                   '$series':        series.lower(),
-                  '$publisher':     publisher.lower(),
-                  '$VolumeY':       'V' + self.comic['ComicYear'],
-                  '$VolumeN':       comicVol.upper(),
-                  '$Type':          booktype
+                  '$publisher':     publisher.lower() if publisher else '',
+                  '$VolumeY':       ('V' + str(self.comic.get('ComicYear'))) if self.comic.get('ComicYear') else '',
+                  '$VolumeN':       comicVol.upper() if comicVol != 'None' else '',
+                  '$Type':          booktype if booktype not in (None, 'None', 'Print') else ''
                   }
 
         if update_loc is not None:
@@ -272,6 +271,10 @@ class FileHandlers(object):
                 ppath = secondary
             else:
                 ppath = mylar.CONFIG.DESTINATION_DIR
+
+            if not ppath or not str(ppath).strip():
+                logger.error('There is no Comic Location Path specified - please specify one in Config/Web Interface.')
+                return None
 
             ddir = pathlib.PurePath(ppath)
             i = 0

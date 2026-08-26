@@ -65,14 +65,20 @@ def addvialist(seriesQueue, issueWantQueue):
                 logger.info('[MASS-ADD][1/%s] Now adding ComicID: %s ' % (seriesQueue.qsize()+1, item['comicid']))
                 mylar.GLOBAL_MESSAGES = {'status': 'success', 'event': 'addbyid', 'comicname': item['comicname'], 'seriesyear': item['seriesyear'], 'comicid': item['comicid'], 'tables': 'None', 'message': 'Now adding via ComicID %s' % (item['comicid'])}
 
-            if 'suppress_addall' in item.keys():
-                addComictoDB(item['comicid'], suppress_addall=item['suppress_addall'])
-            else:
-                addComictoDB(item['comicid'])
+            try:
+                if 'suppress_addall' in item.keys():
+                    addComictoDB(item['comicid'], suppress_addall=item['suppress_addall'])
+                else:
+                    addComictoDB(item['comicid'])
+            except Exception as e:
+                logger.error(f"[MASS-ADD] Unexpected error adding comic {item.get('comicid')}: {e}", exc_info=True)
         elif issueWantQueue.qsize() > 0:
             time.sleep(1)
             issueItem = issueWantQueue.get(True)
-            markIssueWantedById(issueItem)
+            try:
+                markIssueWantedById(issueItem)
+            except Exception as e:
+                logger.error(f"[MASS-ADD] Unexpected error marking issue {issueItem} wanted: {e}", exc_info=True)
         else:
             mylar.ADD_LIST.put('exit')
     return False
@@ -349,8 +355,13 @@ def addComictoDB(comicid, mismatch=None, pullupd=None, imported=None, ogcname=No
 
         dothedew = filers.FileHandlers(comic=comic_values)
         comvalues = dothedew.folder_create()
+        if not comvalues or not comvalues.get('comlocation'):
+            logger.error(f"Failed to create folder for comic {comicid} ({comic['ComicName']})")
+            if dbcomic is None or dbcomic.get('ComicLocation') is None:
+                myDB.upsert("comics", {"Status": "Failed", "ComicName": f"Failed import: {comic['ComicName']}"}, controlValueDict)
+            return {'status': 'incomplete'}
         comlocation = comvalues['comlocation']
-        comsubpath = comvalues['subpath']
+        comsubpath = comvalues.get('subpath', '')
 
         sck = filers.FileHandlers(comic=comic_values)
         scheck = sck.series_folder_collision_detection(comlocation, comicid, booktype, SeriesYear, comicVol)

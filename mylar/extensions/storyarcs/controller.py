@@ -311,7 +311,7 @@ def handle_cbl_entry_action(storyarcid=None, issue_arc_id=None, action=None, csr
     if not storyarcid or not isinstance(storyarcid, str) or not storyarcid.strip():
         return json.dumps({'status': 'error', 'error_code': 'missing_storyarcid', 'message': 'StoryArcID is required.'})
 
-    target_issue_arc = issue_arc_id or kwargs.get('issueid') or kwargs.get('comicid')
+    target_issue_arc = issue_arc_id or kwargs.get('issue_arc_id') or kwargs.get('entry_id') or kwargs.get('issueid') or kwargs.get('comicid')
     if not target_issue_arc or not isinstance(target_issue_arc, str) or not target_issue_arc.strip():
         return json.dumps({'status': 'error', 'error_code': 'missing_entry_id', 'message': 'Entry identifier is required.'})
 
