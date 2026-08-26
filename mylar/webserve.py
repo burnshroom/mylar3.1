@@ -7113,6 +7113,10 @@ class WebInterface(object):
                     "metron_has_token": bool(getattr(mylar.CONFIG, 'METRON_API_TOKEN', None)),
                     "metron_has_password": bool(getattr(mylar.CONFIG, 'METRON_PASSWORD', None)),
                     "metron_base_url": getattr(mylar.CONFIG, 'METRON_BASE_URL', 'https://metron.cloud/api/'),
+                    "kavita_enabled": helpers.checked(getattr(mylar.CONFIG, 'KAVITA_ENABLED', False)),
+                    "kavita_url": getattr(mylar.CONFIG, 'KAVITA_URL', '') or '',
+                    "kavita_has_api_key": bool(getattr(mylar.CONFIG, 'KAVITA_API_KEY', None)),
+                    "mylar_instance_slug": mylar.config.get_mylar_instance_slug(),
                }
         return serve_template(templatename="config.html", title="Settings", config=config, comicinfo=comicinfo)
     config.exposed = True
@@ -7444,7 +7448,7 @@ class WebInterface(object):
                            'prowl_enabled', 'prowl_onsnatch', 'pushover_enabled', 'pushover_onsnatch', 'pushover_image', 'mattermost_enabled', 'mattermost_onsnatch', 'boxcar_enabled',
                            'boxcar_onsnatch', 'pushbullet_enabled', 'pushbullet_onsnatch', 'telegram_enabled', 'telegram_onsnatch', 'telegram_image', 'discord_enabled', 'discord_onsnatch', 'slack_enabled', 'slack_onsnatch',
                            'email_enabled', 'email_enc', 'email_ongrab', 'email_onpost', 'gotify_enabled', 'gotify_server_url', 'gotify_token', 'gotify_onsnatch', 'opds_enable', 'opds_authentication', 'opds_metainfo', 'opds_pagesize', 'enable_ddl',
-                           'enable_getcomics', 'enable_airdcpp', 'jd2_enable', 'enable_external_server', 'ddl_prefer_upscaled', 'deluge_pause', 'metron_enabled'] #enable_public
+                            'enable_getcomics', 'enable_airdcpp', 'jd2_enable', 'enable_external_server', 'ddl_prefer_upscaled', 'deluge_pause', 'metron_enabled'] #enable_public
 
         for checked_config in checked_configs:
             if checked_config not in kwargs:
@@ -7477,6 +7481,33 @@ class WebInterface(object):
             del kwargs['clear_metron_token']
         if 'clear_metron_password' in kwargs:
             del kwargs['clear_metron_password']
+
+        # Handle Kavita URL validation and secret preservation / explicit clear controls
+        if 'kavita_url' in kwargs:
+            kav_url_str = str(kwargs['kavita_url']).strip() if kwargs['kavita_url'] else ''
+            if kav_url_str:
+                from mylar.extensions.providers.kavita.config import validate_kavita_url
+                try:
+                    kwargs['kavita_url'] = validate_kavita_url(kav_url_str)
+                except Exception as e:
+                    logger.warn(f"[KAVITA] Invalid server URL: {e}")
+                    kwargs['kavita_url'] = getattr(mylar.CONFIG, 'KAVITA_URL', '')
+            else:
+                kwargs['kavita_url'] = ''
+
+        if 'clear_kavita_api_key' in kwargs and kwargs['clear_kavita_api_key'] in ('1', 'true', 'True', True, 1):
+            kwargs['kavita_api_key'] = None
+        elif 'kavita_api_key' in kwargs:
+            val = kwargs['kavita_api_key']
+            if val is None or str(val).strip() == '':
+                # Preserve existing stored key if submitted blank without explicit clear
+                if getattr(mylar.CONFIG, 'KAVITA_API_KEY', None) is not None:
+                    kwargs['kavita_api_key'] = mylar.CONFIG.KAVITA_API_KEY
+                else:
+                    kwargs['kavita_api_key'] = None
+
+        if 'clear_kavita_api_key' in kwargs:
+            del kwargs['clear_kavita_api_key']
 
         for k, v in kwargs.items():
             try:
@@ -8708,6 +8739,45 @@ class WebInterface(object):
         from mylar.extensions.providers.metron.runtime_controller import handle_test_metron
         return handle_test_metron(**kwargs)
     testMetron.exposed = True
+
+    def testKavita(self, **kwargs):
+        from mylar.extensions.providers.kavita.runtime_controller import handle_test_kavita
+        return handle_test_kavita(**kwargs)
+    testKavita.exposed = True
+
+    def kavitaDiagnostics(self, **kwargs):
+        from mylar.extensions.providers.kavita.runtime_controller import handle_kavita_diagnostics
+        return handle_kavita_diagnostics(**kwargs)
+    kavitaDiagnostics.exposed = True
+
+    def kavita_diagnostics(self, **kwargs):
+        from mylar.config import get_mylar_instance_slug
+        from mylar.extensions.providers.kavita.publisher_service import (
+            get_kavita_publisher_mappings,
+            get_latest_automation_notice
+        )
+        kavita_status = {
+            'enabled': bool(getattr(mylar.CONFIG, 'KAVITA_ENABLED', False)),
+            'url': getattr(mylar.CONFIG, 'KAVITA_URL', '') or '',
+            'has_api_key': bool(getattr(mylar.CONFIG, 'KAVITA_API_KEY', None)),
+            'mylar_instance_slug': get_mylar_instance_slug(),
+        }
+        publisher_mappings = get_kavita_publisher_mappings()
+        automation_notice = get_latest_automation_notice()
+        return serve_template(
+            templatename="kavita_diagnostics.html",
+            title="Kavita Integration",
+            kavita_status=kavita_status,
+            publisher_mappings=publisher_mappings,
+            automation_notice=automation_notice,
+            **kwargs
+        )
+    kavita_diagnostics.exposed = True
+
+    def kavitaConfigUpdate(self, **kwargs):
+        from mylar.extensions.providers.kavita.runtime_controller import handle_kavita_config_update
+        return handle_kavita_config_update(**kwargs)
+    kavitaConfigUpdate.exposed = True
 
     def metronCompareCredits(self, issueid=None, annual=0, **kwargs):
         from mylar.extensions.providers.metron.runtime_controller import handle_metron_compare_credits

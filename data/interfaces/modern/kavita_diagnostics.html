@@ -1,0 +1,999 @@
+<%!
+    import html
+%>
+<%inherit file="base.html"/>
+<%
+    import mylar
+%>
+
+<%def name="body()">
+    <input type="hidden" id="page_name" value="kavita_diagnostics" />
+
+    <style>
+        /* ─── MODERN KAVITA INTEGRATION DESIGN SYSTEM ─── */
+        .kavita-page-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px 60px 20px;
+        }
+
+        .kavita-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--color-border, #292c37);
+        }
+
+        .kavita-title-group {
+            flex: 1 1 300px;
+        }
+
+        .kavita-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin: 0 0 6px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .kavita-subtitle {
+            font-size: 13.5px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin: 0;
+        }
+
+        .kavita-badges {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .kavita-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: var(--radius-pill, 9999px);
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            color: var(--color-text-secondary, #9ea3b5);
+        }
+
+        .kavita-badge-slug {
+            background: rgba(56, 189, 248, 0.12);
+            border-color: rgba(56, 189, 248, 0.4);
+            color: #38bdf8;
+            font-family: var(--font-mono, monospace);
+        }
+
+        .kavita-badge-readonly {
+            background: rgba(168, 85, 247, 0.12);
+            border-color: rgba(168, 85, 247, 0.4);
+            color: #c084fc;
+        }
+
+        /* ─── CARDS ─── */
+        .kavita-card {
+            background: var(--color-surface, #17181e);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-lg, 12px);
+            padding: 20px;
+            margin-bottom: 24px;
+            transition: border-color 0.15s ease;
+        }
+
+        .kavita-card-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--color-border-subtle, #1f212a);
+        }
+
+        .kavita-card-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .kavita-card-desc {
+            font-size: 13px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin: 4px 0 0 0;
+        }
+
+        /* ─── FORM CONTROLS ─── */
+        .kavita-form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 18px;
+            margin-bottom: 22px;
+        }
+
+        .kavita-form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .kavita-form-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--color-text, #f0f1f5);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .kavita-form-input {
+            width: 100%;
+            max-width: 540px;
+            padding: 10px 14px;
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            color: var(--color-text, #f0f1f5);
+            font-size: 13.5px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.15s ease;
+        }
+
+        .kavita-form-input:focus {
+            border-color: var(--color-accent, #e04652);
+        }
+
+        .kavita-form-help {
+            font-size: 12px;
+            color: var(--color-text-muted, #6c7184);
+            margin: 2px 0 0 0;
+            line-height: 1.4;
+        }
+
+        .kavita-checkbox-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--color-text, #f0f1f5);
+        }
+
+        .kavita-checkbox-row input[type="checkbox"] {
+            width: 17px;
+            height: 17px;
+            cursor: pointer;
+            accent-color: var(--color-accent, #e04652);
+        }
+
+        .kavita-saved-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            margin-top: 6px;
+        }
+
+        /* ─── ACTION BAR ─── */
+        .kavita-action-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .btn-modern-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: var(--radius-md, 8px);
+            font-size: 13.5px;
+            font-weight: 600;
+            color: #fff;
+            background: var(--color-accent, #e04652);
+            border: 1px solid var(--color-accent, #e04652);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-modern-primary:hover:not(:disabled) {
+            background: var(--color-accent-hover, #f05562);
+            border-color: var(--color-accent-hover, #f05562);
+        }
+
+        .btn-modern-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: var(--radius-md, 8px);
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--color-text, #f0f1f5);
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-modern-secondary:hover:not(:disabled) {
+            border-color: var(--color-border-hover, #3c4050);
+            background: var(--color-surface-hover, #252731);
+        }
+
+        .btn-modern-primary:disabled, .btn-modern-secondary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .kavita-feedback-msg {
+            font-size: 13px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+
+        /* ─── READ-ONLY NOTICE BANNER ─── */
+        .kavita-notice-banner {
+            background: rgba(30, 32, 39, 0.6);
+            border: 1px solid var(--color-border, #292c37);
+            border-left: 4px solid #38bdf8;
+            border-radius: var(--radius-md, 8px);
+            padding: 14px 16px;
+            margin-bottom: 24px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--color-text-secondary, #9ea3b5);
+        }
+
+        .kavita-notice-banner strong {
+            color: var(--color-text, #f0f1f5);
+        }
+
+        /* ─── DIAGNOSTIC RESULTS ─── */
+        .kavita-state-card {
+            border-left: 5px solid #2ec467;
+            background: var(--color-surface, #17181e);
+            border-radius: var(--radius-lg, 12px);
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
+        .kavita-state-card.state-warn {
+            border-left-color: #f59e0b;
+        }
+
+        .kavita-state-card.state-error {
+            border-left-color: #e04652;
+        }
+
+        .kavita-state-card.state-clean {
+            border-left-color: #2ec467;
+        }
+
+        .kavita-state-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin: 0 0 6px 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .kavita-state-pill {
+            font-size: 12px;
+            font-family: var(--font-mono, monospace);
+            padding: 3px 8px;
+            border-radius: var(--radius-sm, 5px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .kavita-state-desc {
+            font-size: 13.5px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        /* ─── DISCOVERED LIBRARIES LIST ─── */
+        .kavita-lib-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .kavita-lib-card {
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            padding: 16px 18px;
+        }
+
+        .kavita-lib-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .kavita-lib-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--color-text, #f0f1f5);
+            margin: 0;
+        }
+
+        .status-pill {
+            font-size: 11.5px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm, 5px);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .status-pill-warn {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            color: #f59e0b;
+        }
+
+        .status-pill-clean {
+            background: rgba(46, 196, 103, 0.15);
+            border: 1px solid rgba(46, 196, 103, 0.4);
+            color: #2ec467;
+        }
+
+        .status-pill-error {
+            background: rgba(224, 70, 82, 0.15);
+            border: 1px solid rgba(224, 70, 82, 0.4);
+            color: #e04652;
+        }
+
+        .kavita-path-box {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--color-border-subtle, #1f212a);
+            border-radius: var(--radius-sm, 5px);
+            padding: 8px 12px;
+            font-family: var(--font-mono, monospace);
+            font-size: 12.5px;
+            color: #38bdf8;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+
+        .kavita-warning-callout {
+            font-size: 12.5px;
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.08);
+            border-left: 3px solid #f59e0b;
+            padding: 6px 10px;
+            border-radius: 0 var(--radius-sm, 5px) var(--radius-sm, 5px) 0;
+            line-height: 1.4;
+        }
+
+        /* ─── NAMING PROPOSALS ─── */
+        .kavita-proposal-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .kavita-proposal-card {
+            background: var(--color-surface-elevated, #1e2027);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-md, 8px);
+            padding: 16px 18px;
+        }
+
+        .kavita-proposal-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .kavita-proposed-name {
+            font-size: 14.5px;
+            font-weight: 700;
+            color: #2ec467;
+            font-family: var(--font-mono, monospace);
+        }
+
+        .kavita-proposal-reason {
+            font-size: 12.5px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin-bottom: 6px;
+        }
+
+        .kavita-proposal-disclaimer {
+            font-size: 11.5px;
+            font-style: italic;
+            color: var(--color-text-muted, #6c7184);
+        }
+
+        /* ─── MOBILE 480PX RULES ─── */
+        @media (max-width: 480px) {
+            .kavita-page-container {
+                padding: 16px 12px 40px 12px;
+            }
+            .kavita-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .kavita-form-input {
+                max-width: 100%;
+            }
+            .btn-modern-primary, .btn-modern-secondary {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+
+    <div class="kavita-page-container">
+        <!-- Header -->
+        <div class="kavita-header">
+            <div class="kavita-title-group">
+                <h1 class="kavita-title">Kavita Integration</h1>
+                <p class="kavita-subtitle">Reader &amp; Catalog integration configuration, connection verification, and read-only diagnostics</p>
+            </div>
+            <div class="kavita-badges">
+                <span class="kavita-badge kavita-badge-slug" title="Non-secret persistent instance slug identifier">
+                    Instance: ${kavita_status.get('mylar_instance_slug') or 'unassigned'}
+                </span>
+                <span class="kavita-badge kavita-badge-readonly">
+                    Read-Only Discovery
+                </span>
+            </div>
+        </div>
+
+        <!-- Section 1: Kavita Configuration Card -->
+        <div class="kavita-card">
+            <div class="kavita-card-header">
+                <div>
+                    <h2 class="kavita-card-title">
+                        <svg viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="9" cy="9" r="2.5"></circle>
+                            <path d="M14.5 9a5.5 5.5 0 0 0-.1-1l1.5-1.2-1.4-2.4-1.8.7a5.7 5.7 0 0 0-1.7-1l-.3-1.9H7.8l-.3 1.9a5.7 5.7 0 0 0-1.7 1l-1.8-.7-1.4 2.4 1.5 1.2a5.5 5.5 0 0 0 0 2l-1.5 1.2 1.4 2.4 1.8-.7a5.7 5.7 0 0 0 1.7 1l.3 1.9h2.8l.3-1.9a5.7 5.7 0 0 0 1.7-1l1.8.7 1.4-2.4-1.5-1.2c.1-.3.1-.7.1-1z"></path>
+                        </svg>
+                        Kavita Server Configuration
+                    </h2>
+                    <p class="kavita-card-desc">Configure connection settings for your Kavita reader and library server.</p>
+                </div>
+            </div>
+
+            <div class="kavita-form-grid">
+                <div class="kavita-form-group">
+                    <label class="kavita-checkbox-row">
+                        <input type="checkbox" id="kavita_enabled_modern" ${'checked="checked"' if kavita_status.get('enabled') else ''}>
+                        <span>Enable Kavita Integration</span>
+                    </label>
+                    <p class="kavita-form-help">Optional reader and catalog integration. Disabled by default.</p>
+                </div>
+
+                <div id="kavita_config_fields" style="${'' if kavita_status.get('enabled') else 'display:none;'}">
+                    <div class="kavita-form-group" style="margin-bottom: 16px;">
+                        <label class="kavita-form-label" for="kavita_url_modern">Kavita Server URL</label>
+                        <input type="text" id="kavita_url_modern" class="kavita-form-input" value="${kavita_status.get('url') or ''}" placeholder="http://127.0.0.1:5000" autocomplete="off">
+                        <p class="kavita-form-help">Base URL of your Kavita instance (e.g. http://127.0.0.1:5000 or https://kavita.example.com/)</p>
+                    </div>
+
+                    <div class="kavita-form-group">
+                        <label class="kavita-form-label" for="kavita_api_key_modern">Kavita API Key</label>
+                        <input type="password" id="kavita_api_key_modern" class="kavita-form-input" value="" placeholder="${'••••••••' if kavita_status.get('has_api_key') else 'Enter Kavita API Key'}" autocomplete="new-password">
+                        %if kavita_status.get('has_api_key'):
+                            <div class="kavita-saved-row">
+                                <span class="status-pill status-pill-clean">✓ API Key Saved</span>
+                                <label class="kavita-checkbox-row" style="font-size: 12.5px; font-weight: normal;">
+                                    <input type="checkbox" id="clear_kavita_api_key_modern" value="1">
+                                    <span>Clear saved API key</span>
+                                </label>
+                            </div>
+                        %endif
+                        <p class="kavita-form-help">API key generated in Kavita under User Settings &gt; Manage Auth Keys. Uses pure x-api-key transport.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kavita-action-bar">
+                <button type="button" id="save_kavita_config_btn" class="btn-modern-primary">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 14H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h7l4 4v7a1 1 0 0 1-1 1z"></path>
+                        <path d="M10 2v4H5V2M5 14v-4h6v4"></path>
+                    </svg>
+                    Save Configuration
+                </button>
+                <button type="button" id="test_kavita_conn_btn" class="btn-modern-secondary">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="8" cy="8" r="6"></circle>
+                        <path d="M8 5v3l2 2"></path>
+                    </svg>
+                    Test Connection
+                </button>
+                <span id="kavita_action_feedback" class="kavita-feedback-msg"></span>
+            </div>
+            <p class="kavita-form-help" style="margin-top: 10px;">Note: Test Connection performs a read-only compatibility check using saved configuration. It does not create, map, modify, rescan, or delete any Kavita library.</p>
+        </div>
+
+        <!-- Read-Only Safety Guarantee Banner -->
+        <div class="kavita-notice-banner">
+            <strong>Read-Only Safety Guarantee:</strong> Diagnostics and connection checks perform zero library mutations, creations, updates, renames, deletions, folder scans, root bindings, database writes, or filesystem writes. Remote discovery results are observations only.
+        </div>
+
+        <!-- Section 2: Publisher Root Mappings Card (Phase K5) -->
+        <div class="kavita-card" id="kavita_mappings_card">
+            <div class="kavita-card-header">
+                <div>
+                    <h2 class="kavita-card-title">
+                        <svg viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 4a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4z"></path>
+                        </svg>
+                        Publisher Root Mappings (<span id="kavita_mappings_count">${len(publisher_mappings) if publisher_mappings else 0}</span>)
+                    </h2>
+                    <p class="kavita-card-desc">Active Mylar-to-Kavita publisher library mappings and scan status. Updated automatically upon comic post-processing.</p>
+                </div>
+            </div>
+
+            %if automation_notice:
+                <div class="kavita-warning-callout" style="margin-bottom: 16px;">
+                    ℹ️ ${html.escape(str(automation_notice))}
+                </div>
+            %endif
+
+            <div id="kavita_mappings_list" class="kavita-lib-list">
+                %if publisher_mappings:
+                    %for m in publisher_mappings:
+                        <div class="kavita-lib-card">
+                            <div class="kavita-lib-header">
+                                <div class="kavita-lib-name">${html.escape(str(m.get('publisher_display_name') or m.get('PublisherDisplayName') or 'Unknown'))}</div>
+                                <div>
+                                    <% m_state = m.get('mapping_state') or m.get('MappingState') %>
+                                    %if m_state == 'active':
+                                        <span class="status-pill status-pill-clean">ACTIVE</span>
+                                    %elif m_state == 'creating':
+                                        <span class="status-pill status-pill-warn">CREATING LEASE</span>
+                                    %elif m_state == 'ambiguous_multi_path':
+                                        <span class="status-pill status-pill-error">AMBIGUOUS PATH</span>
+                                    %elif m_state == 'path_rejected':
+                                        <span class="status-pill status-pill-error">PATH REJECTED</span>
+                                    %elif m_state == 'remote_missing':
+                                        <span class="status-pill status-pill-warn">REMOTE MISSING</span>
+                                    %else:
+                                        <span class="status-pill status-pill-warn">${html.escape(str(m_state or 'UNKNOWN'))}</span>
+                                    %endif
+                                </div>
+                            </div>
+                            <div class="kavita-path-box">
+                                Local Literal Path: ${html.escape(str(m.get('canonical_publisher_path') or m.get('CanonicalPublisherPath') or ''))}
+                            </div>
+                            <div style="font-size: 12.5px; color: var(--color-text-secondary, #9ea3b5); margin-bottom: 6px;">
+                                <% lib_id = m.get('kavita_library_id') or m.get('KavitaLibraryID') %>
+                                %if lib_id:
+                                    Remote Kavita Library: <strong>${html.escape(str(m.get('observed_library_name') or m.get('publisher_display_name') or m.get('ObservedLibraryName') or m.get('PublisherDisplayName') or ''))}</strong> (ID: ${lib_id}) &bull; Provenance: ${html.escape(str(m.get('provenance') or m.get('Provenance') or 'mylar_created'))}
+                                %else:
+                                    Remote Kavita Library: <em>Unmapped</em>
+                                %endif
+                                <% scan_time = m.get('last_scan_queued_at') or m.get('LastScanQueuedAt') %>
+                                %if scan_time:
+                                    &bull; Last Scan Queued: ${scan_time}
+                                %endif
+                            </div>
+                            <% err_msg = m.get('last_error_message') or m.get('LastErrorMessage') %>
+                            <% next_retry = m.get('next_eligible_retry_at') or m.get('NextEligibleRetryAt') %>
+                            %if err_msg:
+                                <div class="kavita-warning-callout" style="margin-top: 8px;">
+                                    ⚠️ ${html.escape(str(err_msg))}
+                                    %if next_retry:
+                                        <br/><small style="color: var(--color-text-muted, #6c7184);">Next eligible retry after: ${next_retry}</small>
+                                    %endif
+                                </div>
+                            %endif
+                        </div>
+                    %endfor
+                %else:
+                    <div style="font-size: 13px; color: var(--color-text-muted, #6c7184); padding: 12px 0;">
+                        No publisher mappings established yet. When Mylar imports comics into publisher folders, mappings and Kavita libraries will be created automatically.
+                    </div>
+                %endif
+            </div>
+        </div>
+
+        <!-- Section 3: Kavita Diagnostics Card -->
+        <div class="kavita-card">
+            <div class="kavita-card-header">
+                <div>
+                    <h2 class="kavita-card-title">
+                        <svg viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 3.5h12v11H3z"></path>
+                            <path d="M6 3.5v11"></path>
+                        </svg>
+                        Discovery &amp; Path Alignment Diagnostics
+                    </h2>
+                    <p class="kavita-card-desc">Inspect remote Kavita libraries, observe remote path strings, and detect collision states without mutating server data.</p>
+                </div>
+            </div>
+
+            <div class="kavita-action-bar">
+                <button type="button" id="run_kavita_diagnostics_modern" class="btn-modern-primary">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="8" cy="8" r="6"></circle>
+                        <path d="M8 5v3l2 2"></path>
+                    </svg>
+                    Run Discovery Diagnostics
+                </button>
+                <div id="kavita_diagnostics_loading" class="kavita-spinner" style="display: none; font-size: 13px; color: var(--color-text-secondary, #9ea3b5);">
+                    <span>⏳ Querying Kavita server in read-only mode...</span>
+                </div>
+            </div>
+
+            <!-- Dynamic Results Area -->
+            <div id="kavita_diagnostics_results" style="display: none; margin-top: 24px;">
+                <!-- State Summary Card -->
+                <div id="kavita_state_card" class="kavita-state-card">
+                    <div class="kavita-state-title">
+                        <span>Diagnostic State:</span>
+                        <span id="kavita_state_pill" class="kavita-state-pill">unknown</span>
+                        <span id="kavita_server_version_badge" style="font-size: 12px; color: var(--color-text-muted, #6c7184); font-weight: normal;"></span>
+                    </div>
+                    <p id="kavita_state_desc" class="kavita-state-desc"></p>
+                </div>
+
+                <!-- Discovered Remote Libraries Card -->
+                <div style="margin-top: 20px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: var(--color-text, #f0f1f5); margin: 0 0 10px 0;">
+                        Observed Remote Libraries (<span id="kavita_libs_count">0</span>)
+                    </h3>
+                    <div id="kavita_libs_list" class="kavita-lib-list"></div>
+                </div>
+
+                <!-- Future Naming Proposals Card -->
+                <div id="kavita_proposals_section" style="margin-top: 24px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: var(--color-text, #f0f1f5); margin: 0 0 10px 0;">
+                        Future Naming Proposals (Unbound)
+                    </h3>
+                    <div id="kavita_proposals_list" class="kavita-proposal-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            // Toggle fields visibility
+            $('#kavita_enabled_modern').change(function() {
+                if ($(this).is(':checked')) {
+                    $('#kavita_config_fields').slideDown(150);
+                } else {
+                    $('#kavita_config_fields').slideUp(150);
+                }
+            });
+
+            // 1. Save Configuration
+            $('#save_kavita_config_btn').click(function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var $feedback = $('#kavita_action_feedback');
+                var isEnabled = $('#kavita_enabled_modern').is(':checked');
+                var urlVal = $('#kavita_url_modern').val();
+                var keyVal = $('#kavita_api_key_modern').val();
+                var isClear = $('#clear_kavita_api_key_modern').is(':checked');
+
+                $btn.prop('disabled', true);
+                $feedback.css('color', 'var(--color-text-secondary, #9ea3b5)').text('Saving configuration...');
+
+                $.ajax({
+                    type: 'POST',
+                    url: 'kavitaConfigUpdate',
+                    data: {
+                        kavita_enabled: isEnabled,
+                        kavita_url: urlVal,
+                        kavita_api_key: keyVal,
+                        clear_kavita_api_key: isClear ? '1' : '0'
+                    },
+                    dataType: 'json',
+                    success: function(data) {
+                        $btn.prop('disabled', false);
+                        if (data && data.success) {
+                            $feedback.css('color', '#2ec467').text('✓ ' + data.message);
+                            $('#kavita_api_key_modern').val('');
+                            if (data.has_api_key) {
+                                $('#kavita_api_key_modern').attr('placeholder', '••••••••');
+                            } else {
+                                $('#kavita_api_key_modern').attr('placeholder', 'Enter Kavita API Key');
+                            }
+                        } else {
+                            var msg = (data && data.message) ? data.message : 'Failed to save configuration.';
+                            $feedback.css('color', '#e04652').text('✗ ' + msg);
+                        }
+                    },
+                    error: function(xhr) {
+                        $btn.prop('disabled', false);
+                        var msg = 'Failed to save configuration.';
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            if (errData && errData.message) msg = errData.message;
+                        } catch(e) {}
+                        $feedback.css('color', '#e04652').text('✗ ' + msg);
+                    }
+                });
+            });
+
+            // 2. Test Connection
+            $('#test_kavita_conn_btn').click(function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var $feedback = $('#kavita_action_feedback');
+
+                $btn.prop('disabled', true);
+                $feedback.css('color', 'var(--color-text-secondary, #9ea3b5)').text('Testing connection to Kavita server...');
+
+                $.ajax({
+                    type: 'POST',
+                    url: 'testKavita',
+                    dataType: 'json',
+                    success: function(data) {
+                        $btn.prop('disabled', false);
+                        if (data && data.success) {
+                            $feedback.css('color', '#2ec467').text('✓ ' + data.message);
+                        } else {
+                            var msg = (data && data.message) ? data.message : 'Connection test failed.';
+                            $feedback.css('color', '#e04652').text('✗ ' + msg);
+                        }
+                    },
+                    error: function(xhr) {
+                        $btn.prop('disabled', false);
+                        var msg = 'Connection test failed.';
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            if (errData && errData.message) msg = errData.message;
+                        } catch(e) {}
+                        $feedback.css('color', '#e04652').text('✗ ' + msg);
+                    }
+                });
+            });
+
+            // 3. Run Discovery Diagnostics
+            $('#run_kavita_diagnostics_modern').click(function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var $spinner = $('#kavita_diagnostics_loading');
+                var $results = $('#kavita_diagnostics_results');
+                var $stateCard = $('#kavita_state_card');
+                var $statePill = $('#kavita_state_pill');
+                var $versionBadge = $('#kavita_server_version_badge');
+                var $stateDesc = $('#kavita_state_desc');
+                var $libsCount = $('#kavita_libs_count');
+                var $libsList = $('#kavita_libs_list');
+                var $proposalsSection = $('#kavita_proposals_section');
+                var $proposalsList = $('#kavita_proposals_list');
+
+                $btn.prop('disabled', true);
+                $spinner.show();
+                $results.hide();
+
+                $.ajax({
+                    type: 'POST',
+                    url: 'kavitaDiagnostics',
+                    dataType: 'json',
+                    success: function(data) {
+                        $btn.prop('disabled', false);
+                        $spinner.hide();
+                        $results.fadeIn(200);
+
+                        var state = data.diagnostic_state || 'unknown';
+                        $statePill.text(state);
+                        $stateDesc.text(data.state_summary || 'Diagnostic run completed.');
+
+                        if (data.kavita_server_version) {
+                            $versionBadge.text('• Server v' + data.kavita_server_version);
+                        } else {
+                            $versionBadge.empty();
+                        }
+
+                        $stateCard.removeClass('state-clean state-warn state-error');
+                        if (state === 'clean_name_candidate') {
+                            $stateCard.addClass('state-clean');
+                        } else if (state.indexOf('unaligned') !== -1 || state.indexOf('unvalidated') !== -1 || state.indexOf('collision') !== -1) {
+                            $stateCard.addClass('state-warn');
+                        } else {
+                            $stateCard.addClass('state-error');
+                        }
+
+                        var libs = data.discovered_libraries || [];
+                        $libsCount.text(libs.length);
+                        if (libs.length > 0) {
+                            var libHtml = '';
+                            for (var i = 0; i < libs.length; i++) {
+                                var l = libs[i];
+                                var rawPaths = (l.observed_raw_paths || []).join(', ') || 'none';
+                                var alignStatus = l.path_alignment_status || 'unaligned';
+                                var statusClass = (alignStatus === 'clean_aligned') ? 'status-pill-clean' : 'status-pill-warn';
+
+                                libHtml += '<div class="kavita-lib-card">' +
+                                    '<div class="kavita-lib-header">' +
+                                        '<h3 class="kavita-lib-name">' + htmlEscape(l.library_name) + ' <span style="font-size: 12px; font-weight: normal; color: var(--color-text-muted, #6c7184);">(ID: ' + l.library_id + ')</span></h3>' +
+                                        '<span class="status-pill ' + statusClass + '">' + htmlEscape(alignStatus) + '</span>' +
+                                    '</div>' +
+                                    '<div class="kavita-path-box">Observed Path: ' + htmlEscape(rawPaths) + '</div>' +
+                                    (l.warning ? '<div class="kavita-warning-callout">⚠️ ' + htmlEscape(l.warning) + '</div>' : '') +
+                                '</div>';
+                            }
+                            $libsList.html(libHtml);
+                        } else {
+                            $libsList.html('<div style="font-size: 13px; color: var(--color-text-muted, #6c7184); font-style: italic; padding: 12px 0;">No remote libraries discovered on Kavita server.</div>');
+                        }
+
+                        var proposals = data.future_naming_proposals || [];
+                        if (proposals.length > 0) {
+                            $proposalsSection.show();
+                            var propHtml = '';
+                            for (var j = 0; j < proposals.length; j++) {
+                                var p = proposals[j];
+                                propHtml += '<div class="kavita-proposal-card">' +
+                                    '<div class="kavita-proposal-row">' +
+                                        '<span style="font-size: 13px; color: var(--color-text-secondary, #9ea3b5);">Publisher: <strong>' + htmlEscape(p.publisher_name) + '</strong> &rarr;</span>' +
+                                        '<span class="kavita-proposed-name">' + htmlEscape(p.proposed_name) + '</span>' +
+                                        '<span class="status-pill status-pill-clean">' + htmlEscape(p.proposal_type) + '</span>' +
+                                    '</div>' +
+                                    (p.reason ? '<div class="kavita-proposal-reason">' + htmlEscape(p.reason) + '</div>' : '') +
+                                    '<div class="kavita-proposal-disclaimer">' + htmlEscape(p.disclaimer || 'Future naming proposal only. This proposal is not an active mapping, selection, or mutation.') + '</div>' +
+                                '</div>';
+                            }
+                            $proposalsList.html(propHtml);
+                        } else {
+                            $proposalsSection.hide();
+                            $proposalsList.empty();
+                        }
+                    },
+                    error: function(xhr) {
+                        $btn.prop('disabled', false);
+                        $spinner.hide();
+                        $results.fadeIn(200);
+
+                        $stateCard.removeClass('state-clean state-warn').addClass('state-error');
+                        $statePill.text('request_failed');
+                        $versionBadge.empty();
+
+                        var errMsg = 'Failed to execute discovery diagnostics.';
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            if (errData && errData.message) errMsg = errData.message;
+                        } catch(e) {}
+
+                        $stateDesc.html('<span style="color: #e04652; font-weight: 600;">✗ ' + htmlEscape(errMsg) + '</span>');
+                        $libsCount.text('0');
+                        $libsList.empty();
+                        $proposalsSection.hide();
+                    }
+                });
+            });
+
+            function htmlEscape(str) {
+                if (!str) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            // Preview handler for visual verification and testing
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('preview') === 'results') {
+                    var $results = $('#kavita_diagnostics_results');
+                    var $stateCard = $('#kavita_state_card');
+                    var $statePill = $('#kavita_state_pill');
+                    var $versionBadge = $('#kavita_server_version_badge');
+                    var $stateDesc = $('#kavita_state_desc');
+                    var $libsCount = $('#kavita_libs_count');
+                    var $libsList = $('#kavita_libs_list');
+                    var $proposalsSection = $('#kavita_proposals_section');
+                    var $proposalsList = $('#kavita_proposals_list');
+
+                    var mockData = {
+                        "success": true,
+                        "status_code": 200,
+                        "diagnostic_state": "raw_path_equal_unvalidated",
+                        "state_summary": "Observed raw path string equality with Kavita library 'DC Comics', but physical storage equivalence is unproven without a validated root binding.",
+                        "kavita_server_version": "0.8.2.0",
+                        "mylar_instance_slug": "${kavita_status.get('mylar_instance_slug') or 'mylar-f47ac1'}",
+                        "discovered_libraries": [
+                            {
+                                "library_id": 1,
+                                "library_name": "DC Comics",
+                                "library_type": 1,
+                                "observed_raw_paths": ["/comics/DC Comics"],
+                                "path_alignment_status": "raw_path_equal_unvalidated",
+                                "warning": "Raw path strings are identical, but identical string values do not prove shared container storage. Remote library remains untrusted and unselected."
+                            },
+                            {
+                                "library_id": 2,
+                                "library_name": "Marvel Comics",
+                                "library_type": 1,
+                                "observed_raw_paths": ["/data/comics/Marvel Comics"],
+                                "path_alignment_status": "cross_container_unaligned",
+                                "warning": "Remote path '/data/comics/Marvel Comics' differs from local path. Cross-container alignment is unverified."
+                            }
+                        ],
+                        "future_naming_proposals": [
+                            {
+                                "publisher_name": "DC Comics",
+                                "proposed_name": "DC Comics (${kavita_status.get('mylar_instance_slug') or 'mylar-f47ac1'})",
+                                "proposal_type": "instance_qualified",
+                                "reason": "Existing Kavita library 'DC Comics' claims the clean display name on an unvalidated raw path. Qualified proposal avoids duplicate-name conflict while physical equivalence is unproven.",
+                                "disclaimer": "Future naming proposal only. This proposal is not an active mapping, selection, or mutation."
+                            }
+                        ]
+                    };
+                    $results.show();
+                    $statePill.text(mockData.diagnostic_state);
+                    $stateDesc.text(mockData.state_summary);
+                    $versionBadge.text('• Server v' + mockData.kavita_server_version);
+                    $stateCard.addClass('state-warn');
+
+                    var libs = mockData.discovered_libraries;
+                    $libsCount.text(libs.length);
+                    var libHtml = '';
+                    for (var i = 0; i < libs.length; i++) {
+                        var l = libs[i];
+                        var rawPaths = l.observed_raw_paths.join(', ');
+                        var alignStatus = l.path_alignment_status;
+                        libHtml += '<div class="kavita-lib-card">' +
+                            '<div class="kavita-lib-header">' +
+                                '<h3 class="kavita-lib-name">' + htmlEscape(l.library_name) + ' <span style="font-size: 12px; font-weight: normal; color: var(--color-text-muted, #6c7184);">(ID: ' + l.library_id + ')</span></h3>' +
+                                '<span class="status-pill status-pill-warn">' + htmlEscape(alignStatus) + '</span>' +
+                            '</div>' +
+                            '<div class="kavita-path-box">Observed Path: ' + htmlEscape(rawPaths) + '</div>' +
+                            (l.warning ? '<div class="kavita-warning-callout">⚠️ ' + htmlEscape(l.warning) + '</div>' : '') +
+                        '</div>';
+                    }
+                    $libsList.html(libHtml);
+
+                    var proposals = mockData.future_naming_proposals;
+                    $proposalsSection.show();
+                    var propHtml = '';
+                    for (var j = 0; j < proposals.length; j++) {
+                        var p = proposals[j];
+                        propHtml += '<div class="kavita-proposal-card">' +
+                            '<div class="kavita-proposal-row">' +
+                                '<span style="font-size: 13px; color: var(--color-text-secondary, #9ea3b5);">Publisher: <strong>' + htmlEscape(p.publisher_name) + '</strong> &rarr;</span>' +
+                                '<span class="kavita-proposed-name">' + htmlEscape(p.proposed_name) + '</span>' +
+                                '<span class="status-pill status-pill-clean">' + htmlEscape(p.proposal_type) + '</span>' +
+                            '</div>' +
+                            '<div class="kavita-proposal-reason">' + htmlEscape(p.reason) + '</div>' +
+                            '<div class="kavita-proposal-disclaimer">' + htmlEscape(p.disclaimer) + '</div>' +
+                        '</div>';
+                    }
+                    $proposalsList.html(propHtml);
+                }
+            } catch(e) {}
+        });
+    </script>
+</%def>

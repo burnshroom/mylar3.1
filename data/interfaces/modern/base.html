@@ -164,6 +164,13 @@
                             </svg>
                             <span class="nav-label">Settings</span>
                         </a>
+                        <a href="kavita_diagnostics" class="nav-item" data-nav="kavita_diagnostics">
+                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 4.5h12M3 8.5h12M3 12.5h6"></path>
+                                <circle cx="13.5" cy="12.5" r="2.5"></circle>
+                            </svg>
+                            <span class="nav-label">Kavita Integration</span>
+                        </a>
                     </div>
                 </div>
 
@@ -939,6 +946,7 @@
                     (pageName === 'manage_comics' && navTarget === 'manageComics') ||
                     (pageName === 'storyarc' && navTarget === 'storyarcs') ||
                     (pageName === 'creators' && navTarget === 'creators') ||
+                    (pageName === 'kavita_diagnostics' && navTarget === 'kavita_diagnostics') ||
                     (pageName === 'creator_detail' && navTarget === 'creators')))) {
                     $(this).addClass("active");
                 }

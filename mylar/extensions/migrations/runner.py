@@ -5,13 +5,19 @@ Executes registered extension migrations in sequence.
 """
 
 from mylar import logger
-from mylar.extensions.migrations.versions import storyarc_manifests, creators, creator_identity_resolution
+from mylar.extensions.migrations.versions import (
+    storyarc_manifests,
+    creators,
+    creator_identity_resolution,
+    kavita_publisher_mappings
+)
 
 # Ordered list of migration modules
 MIGRATIONS = [
     storyarc_manifests,
     creators,
     creator_identity_resolution,
+    kavita_publisher_mappings,
 ]
 
 

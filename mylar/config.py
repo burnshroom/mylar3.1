@@ -78,6 +78,7 @@ _CONFIG_DEFINITIONS = OrderedDict({
     'IGNORE_SEARCH_WORDS': (str, 'General', []),
     'USE_MINSIZE': (bool, 'General', False),
     'MINSIZE': (str, 'General', None),
+    'MYLAR_INSTANCE_ID': (str, 'General', None),
     'USE_MAXSIZE': (bool, 'General', False),
     'MAXSIZE': (str, 'General', None),
     'AUTOWANT_UPCOMING': (bool, 'General', True),
@@ -169,6 +170,10 @@ _CONFIG_DEFINITIONS = OrderedDict({
     'METRON_USERNAME': (str, 'Metron', None),
     'METRON_PASSWORD': (str, 'Metron', None),
     'METRON_BASE_URL': (str, 'Metron', 'https://metron.cloud/api/'),
+
+    'KAVITA_ENABLED': (bool, 'Kavita', False),
+    'KAVITA_URL': (str, 'Kavita', ''),
+    'KAVITA_API_KEY': (str, 'Kavita', None),
 
     'LOG_DIR' : (str, 'Logs', None),
     'MAX_LOGSIZE' : (int, 'Logs', 10000000),
@@ -1168,6 +1173,7 @@ class Config(object):
                             'EMAIL_PASSWORD':        ('Email','email_password', self.EMAIL_PASSWORD),
                             'METRON_API_TOKEN':      ('Metron', 'metron_api_token', self.METRON_API_TOKEN),
                             'METRON_PASSWORD':       ('Metron', 'metron_password', self.METRON_PASSWORD),
+                            'KAVITA_API_KEY':        ('Kavita', 'kavita_api_key', self.KAVITA_API_KEY),
                             })
 
         new_encrypted = 0
@@ -1212,6 +1218,13 @@ class Config(object):
             self.WRITE_THE_CONFIG = True
 
     def configure(self, update=False, startup=False):
+
+        # Initialize stable non-secret MYLAR_INSTANCE_ID once if absent
+        if not getattr(self, 'MYLAR_INSTANCE_ID', None) or not str(self.MYLAR_INSTANCE_ID).strip():
+            import uuid
+            self.MYLAR_INSTANCE_ID = str(uuid.uuid4())
+            config.set('General', 'mylar_instance_id', str(self.MYLAR_INSTANCE_ID))
+            self.WRITE_THE_CONFIG = True
 
         if all([self.CLEAR_PROVIDER_TABLE is True, startup is True]):
             mylar.MAINTENANCE = True
@@ -2198,3 +2211,26 @@ def ddl_creations():
         hcp_create = filechecker.validateAndCreateDirectory(html_cache_path, create=True, dmode='html cache')
         if hcp_create is False:
             logger.error('Unable to create html_cache folder within the cache folder location [%s]. DDL will not work until this is corrected.' % html_cache_path)
+
+
+def get_mylar_instance_id():
+    """Return persistent canonical MYLAR_INSTANCE_ID string, or None if unconfigured."""
+    if hasattr(mylar, 'CONFIG') and mylar.CONFIG:
+        val = getattr(mylar.CONFIG, 'MYLAR_INSTANCE_ID', None)
+        if val and str(val).strip():
+            return str(val).strip()
+    return None
+
+
+def get_mylar_instance_slug():
+    """
+    Return short stable display derivative (e.g. 'mylar-f47ac1') for candidate collision naming.
+    Never exposes the full UUID.
+    """
+    inst_id = get_mylar_instance_id()
+    if not inst_id:
+        return None
+    cleaned = inst_id.replace('-', '').lower()
+    if len(cleaned) >= 6:
+        return f"mylar-{cleaned[:6]}"
+    return f"mylar-{cleaned}"

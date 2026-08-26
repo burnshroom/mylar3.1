@@ -3386,6 +3386,25 @@ class PostProcessor(object):
             logger.info('%s Post-Processing completed for: %s %s' % (module, series, dispiss))
             self._log("Post Processing SUCCESSFUL! ")
 
+            # Kavita Publisher Automation Hook (Phase K5)
+            try:
+                if getattr(mylar.CONFIG, 'KAVITA_ENABLED', False):
+                    from mylar.extensions.providers.kavita.publisher_service import handle_post_processing_kavita_automation
+                    # Authoritative series directory (parent directory of the final imported file dst)
+                    series_dir_path = comlocation if comlocation else os.path.dirname(dst)
+                    kavita_comic_data = {
+                        'SeriesLocation': series_dir_path,
+                        'ComicLocation': series_dir_path,
+                        'FinalFilePath': dst,
+                        'ComicPublisher': publisher,
+                        'ComicName': series,
+                        'ComicID': comicid,
+                        'IssueID': issueid
+                    }
+                    handle_post_processing_kavita_automation(kavita_comic_data)
+            except Exception:
+                logger.fdebug(f"{module} Kavita post-processing automation suppressed an internal exception.")
+
             self.valreturn.append({"self.log": self.log,
                                    "mode": 'stop',
                                    "issueid": issueid,
