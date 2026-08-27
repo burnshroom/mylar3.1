@@ -45,6 +45,96 @@ def _row_get(row, key, default=None):
         return default
 
 
+def check_mylar_comic_location(comic_dir=None):
+    """
+    Structured local-access validation for Mylar's configured Comic Location (COMIC_DIR).
+    Strictly local check: zero remote calls, zero mount inspections, zero path translations.
+    Returns dict with fields:
+      - is_valid: bool
+      - error_code: 'comic_location_unavailable' if invalid else None
+      - reason: 'not_configured' | 'not_found' | 'not_a_directory' | 'not_accessible' | None
+      - message: str
+      - configured_path: str or None
+      - remediation: str or None
+    """
+    if comic_dir is None:
+        comic_dir = getattr(mylar.CONFIG, 'COMIC_DIR', None)
+
+    if comic_dir is None or not str(comic_dir).strip():
+        return {
+            'is_valid': False,
+            'error_code': 'comic_location_unavailable',
+            'reason': 'not_configured',
+            'message': 'Mylar Comic Location is not configured.',
+            'configured_path': None,
+            'remediation': 'Configure the Comic Location in Settings > Download Settings, then retry.'
+        }
+
+    path_str = str(comic_dir).strip()
+    if not os.path.exists(path_str):
+        return {
+            'is_valid': False,
+            'error_code': 'comic_location_unavailable',
+            'reason': 'not_found',
+            'message': f"Configured Comic Location does not exist: {path_str}",
+            'configured_path': path_str,
+            'remediation': 'Verify that the Comic Location directory exists on disk and is mounted into the Mylar container, then retry.'
+        }
+
+    if not os.path.isdir(path_str):
+        return {
+            'is_valid': False,
+            'error_code': 'comic_location_unavailable',
+            'reason': 'not_a_directory',
+            'message': f"Configured Comic Location is not a directory: {path_str}",
+            'configured_path': path_str,
+            'remediation': 'Specify a valid directory path for the Comic Location in Settings > Download Settings, then retry.'
+        }
+
+    try:
+        if not os.access(path_str, os.R_OK):
+            return {
+                'is_valid': False,
+                'error_code': 'comic_location_unavailable',
+                'reason': 'not_accessible',
+                'message': f"Configured Comic Location is not accessible (permission denied): {path_str}",
+                'configured_path': path_str,
+                'remediation': 'Ensure the Mylar process has read permissions for the Comic Location directory, then retry.'
+            }
+        os.listdir(path_str)
+    except Exception:
+        return {
+            'is_valid': False,
+            'error_code': 'comic_location_unavailable',
+            'reason': 'not_accessible',
+            'message': f"Configured Comic Location is not accessible: {path_str}",
+            'configured_path': path_str,
+            'remediation': 'Ensure the Mylar process has read permissions for the Comic Location directory, then retry.'
+        }
+
+    return {
+        'is_valid': True,
+        'error_code': None,
+        'reason': None,
+        'message': 'Comic Location is accessible.',
+        'configured_path': path_str,
+        'remediation': None
+    }
+
+
+def log_comic_location_rejection(check_result):
+    """
+    Emit sanitized, dedicated warning log event for comic location validation failure.
+    Never logs API keys, tokens, server URLs, full UUIDs, exception tracebacks, or raw exception text.
+    """
+    reason = check_result.get('reason') or 'unavailable'
+    path = check_result.get('configured_path')
+    if path:
+        logger.warn(f"[KAVITA-BACKFILL] comic_location_unavailable: configured Comic Location is unavailable to Mylar (reason={reason}, path='{path}').")
+    else:
+        logger.warn(f"[KAVITA-BACKFILL] comic_location_unavailable: configured Comic Location is unavailable to Mylar (reason={reason}).")
+
+
 class KavitaSyncBackfillWorker:
     """
     Singleton background worker for Kavita publisher-library backfill.
@@ -124,13 +214,19 @@ class KavitaSyncBackfillWorker:
                 'message': 'Kavita integration is not enabled or configured.'
             }
 
-        comic_dir = getattr(mylar.CONFIG, 'COMIC_DIR', None)
-        if not comic_dir or not os.path.isdir(comic_dir):
+        comic_loc_check = check_mylar_comic_location()
+        if not comic_loc_check['is_valid']:
+            log_comic_location_rejection(comic_loc_check)
             return {
                 'status': 'error',
-                'message': 'Mylar Comic Directory is invalid or missing.'
+                'error_code': comic_loc_check['error_code'],
+                'reason': comic_loc_check['reason'],
+                'message': comic_loc_check['message'],
+                'configured_path': comic_loc_check['configured_path'],
+                'remediation': comic_loc_check['remediation']
             }
 
+        comic_dir = comic_loc_check['configured_path']
         instance_id = getattr(mylar.CONFIG, 'MYLAR_INSTANCE_ID', None)
         server_url = validate_kavita_url(config_status['url'])
 
@@ -241,6 +337,18 @@ class KavitaSyncBackfillWorker:
                     'message': 'Kavita integration is not enabled or configured.'
                 }
 
+            comic_loc_check = check_mylar_comic_location()
+            if not comic_loc_check['is_valid']:
+                log_comic_location_rejection(comic_loc_check)
+                return {
+                    'status': 'error',
+                    'error_code': comic_loc_check['error_code'],
+                    'reason': comic_loc_check['reason'],
+                    'message': comic_loc_check['message'],
+                    'configured_path': comic_loc_check['configured_path'],
+                    'remediation': comic_loc_check['remediation']
+                }
+
             job_id = f"kavita-backfill-{int(time.time())}-{uuid.uuid4().hex[:6]}"
             self._state = {
                 'job_id': job_id,
@@ -291,7 +399,20 @@ class KavitaSyncBackfillWorker:
             config_status = get_kavita_config_status()
             server_url = validate_kavita_url(config_status['url'])
             instance_id = mylar.CONFIG.MYLAR_INSTANCE_ID
-            comic_dir = getattr(mylar.CONFIG, 'COMIC_DIR', None)
+
+            comic_loc_check = check_mylar_comic_location()
+            if not comic_loc_check['is_valid']:
+                log_comic_location_rejection(comic_loc_check)
+                with self._state_lock:
+                    self._state['status'] = 'failed'
+                    self._state['end_time'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    self._state['error_log'].append({
+                        'error_code': comic_loc_check['error_code'],
+                        'reason': comic_loc_check['reason'],
+                        'message': comic_loc_check['message']
+                    })
+                return
+            comic_dir = comic_loc_check['configured_path']
 
             if callable(self._service):
                 service = self._service()

@@ -734,22 +734,19 @@ class TestPhaseK4KavitaDiagnosticsIntegration(unittest.TestCase):
         library_group = base_content.split('<div class="nav-group-title">Library</div>')[1].split('<div class="nav-group-title">Workspace</div>')[0]
         self.assertNotIn('data-nav="creators"', library_group)
 
-        # Verify Settings group with nested Metadata & Identity and Integrations subgroups
+        # Verify single primary Settings item in sidebar
         self.assertIn('<div class="nav-group-title">Settings</div>', base_content)
-        self.assertIn('<div class="nav-subgroup">', base_content)
-        self.assertIn('<div class="nav-subgroup-title">Metadata &amp; Identity</div>', base_content)
-        self.assertIn('<a href="creators" class="nav-item nav-item--sub" data-nav="creators">', base_content)
-        self.assertIn('<div class="nav-subgroup-title">Integrations</div>', base_content)
-        self.assertIn('<a href="kavita_diagnostics" class="nav-item nav-item--sub" data-nav="kavita_diagnostics">', base_content)
-        self.assertIn('<span class="nav-label">Kavita</span>', base_content)
+        self.assertIn('<a href="config" class="nav-item config" data-nav="config">', base_content)
+        self.assertNotIn('nav-subgroup', base_content)
 
-        # 2. Rendered kavita_diagnostics page contains breadcrumbs and title
+        # 2. Rendered kavita_diagnostics page contains Settings tabs and breadcrumbs
         from mylar.webserve import WebInterface
         interface = WebInterface()
         mylar.CONFIG.INTERFACE = 'modern'
         rendered_html = interface.kavita_diagnostics()
 
         self.assertIn('<title>Mylar - Settings / Integrations / Kavita</title>', rendered_html)
+        self.assertIn('settings-nav-tabs', rendered_html)
         self.assertIn('kavita-breadcrumb', rendered_html)
         self.assertIn('href="config"', rendered_html)
         self.assertIn('Settings', rendered_html)

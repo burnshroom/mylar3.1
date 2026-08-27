@@ -227,7 +227,12 @@ def handle_kavita_config_update(
     # 4. Persist to config.ini
     try:
         if hasattr(mylar, 'CONFIG') and hasattr(mylar.CONFIG, 'writeconfig'):
-            mylar.CONFIG.writeconfig()
+            kavita_values = {
+                'kavita_enabled': mylar.CONFIG.KAVITA_ENABLED,
+                'kavita_url': mylar.CONFIG.KAVITA_URL,
+                'kavita_api_key': mylar.CONFIG.KAVITA_API_KEY
+            }
+            mylar.CONFIG.writeconfig(values=kavita_values)
     except Exception as e:
         logger.error(f"[KAVITA] Failed to persist config to disk: {e}")
         if hasattr(cherrypy, 'response'):
@@ -337,6 +342,9 @@ def handle_kavita_sync_backfill_preview(worker=None, csrf_token=None, **kwargs):
     from mylar.extensions.providers.kavita.backfill_worker import KavitaSyncBackfillWorker
     active_worker = worker or KavitaSyncBackfillWorker()
     preview_res = active_worker.compute_preview()
+    if preview_res.get('status') == 'error':
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 400
     return json.dumps(preview_res)
 
 

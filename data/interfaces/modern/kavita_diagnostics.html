@@ -473,6 +473,17 @@
             line-height: 1.4;
         }
 
+        .kavita-error-callout {
+            font-size: 12.5px;
+            color: #f87171;
+            background: rgba(224, 70, 82, 0.08);
+            border: 1px solid rgba(224, 70, 82, 0.3);
+            border-left: 4px solid #e04652;
+            padding: 12px 14px;
+            border-radius: var(--radius-sm, 6px);
+            line-height: 1.5;
+        }
+
         /* ─── NAMING PROPOSALS ─── */
         .kavita-proposal-list {
             display: flex;
@@ -536,6 +547,54 @@
     </style>
 
     <div class="kavita-page-container">
+        <!-- Settings Header -->
+        <div class="settings-header">
+            <div class="settings-title-group">
+                <h1 class="settings-main-title">Settings</h1>
+            </div>
+            <div class="settings-header-actions">
+                <a href="carepackage" class="btn btn-secondary"><i class="fa fa-life-ring"></i> Care Package</a>
+                <a href="restart" class="btn btn-secondary"><i class="fa fa-refresh"></i> Restart</a>
+                <a href="shutdown" class="btn btn-danger"><i class="fa fa-power-off"></i> Shut Down</a>
+            </div>
+        </div>
+
+        <!-- Modern Settings Navigation Tabs -->
+        <div class="settings-nav-tabs" role="tablist" aria-label="Settings Navigation">
+            <a href="config#tabs-1" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <span>General</span>
+            </a>
+            <a href="config#tabs-2" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                <span>Web Interface</span>
+            </a>
+            <a href="config#tabs-3" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Download Settings</span>
+            </a>
+            <a href="config#tabs-4" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>Search Providers</span>
+            </a>
+            <a href="config#tabs-5" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                <span>Quality &amp; Post-Processing</span>
+            </a>
+            <a href="config#tabs-6" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                <span>Advanced Settings</span>
+            </a>
+            <a href="creators" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Metadata &amp; Identity</span>
+            </a>
+            <a href="kavita_diagnostics" class="settings-nav-tab active" role="tab" aria-selected="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span>Integrations</span>
+            </a>
+        </div>
+
         <!-- Breadcrumb Navigation -->
         <nav class="kavita-breadcrumb" aria-label="Breadcrumb">
             <a href="config">Settings</a>
@@ -657,6 +716,27 @@
                         </button>
                     </div>
                 %endif
+            </div>
+
+            <!-- Comic Location Error Callout (Phase K8 Diagnostics) -->
+            <div id="kavita_comic_location_error_callout" class="kavita-error-callout" style="display: none; margin-bottom: 16px;">
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                    <div style="font-size: 18px; line-height: 1;">⚠️</div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 13.5px; color: #f87171; margin-bottom: 4px;">
+                            Mylar Comic Location unavailable
+                        </div>
+                        <div id="kavita_comic_loc_error_details" style="font-size: 12.5px; color: var(--color-text, #f0f1f5); margin-bottom: 6px;">
+                            <!-- Dynamic reason and message -->
+                        </div>
+                        <div style="font-size: 12px; color: var(--color-text-secondary, #9ea3b5);">
+                            <strong>Diagnostic Code:</strong> <code id="kavita_comic_loc_error_code" style="background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; color: #fbbf24;">comic_location_unavailable</code> &bull; <strong>Reason:</strong> <span id="kavita_comic_loc_error_reason" style="color: #f87171; font-weight: 600;">not found</span>
+                        </div>
+                        <div id="kavita_comic_loc_error_remediation" style="font-size: 12px; color: #38bdf8; margin-top: 6px;">
+                            <strong>Next steps:</strong> Configure or fix the Comic Location available to the Mylar container in Settings &gt; Download Settings, then retry.
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Phase K8 Progress Card -->
@@ -1101,11 +1181,29 @@
             // ─── PHASE K8: SYNC EXISTING MYLAR SERIES ───
             var backfillPollTimer = null;
 
+            function showComicLocationError(errData, fallbackMsg) {
+                var code = (errData && errData.error_code) ? errData.error_code : 'comic_location_unavailable';
+                var reason = (errData && errData.reason) ? errData.reason.replace(/_/g, ' ') : 'not accessible';
+                var details = (errData && errData.message) ? errData.message : fallbackMsg;
+                var remediation = (errData && errData.remediation) ? errData.remediation : 'Configure or fix the Comic Location available to the Mylar container in Settings > Download Settings, then retry.';
+
+                $('#kavita_comic_loc_error_details').text(details);
+                $('#kavita_comic_loc_error_code').text(code);
+                $('#kavita_comic_loc_error_reason').text(reason);
+                $('#kavita_comic_loc_error_remediation').html('<strong>Next steps:</strong> ' + htmlEscape(remediation));
+                $('#kavita_comic_location_error_callout').show();
+            }
+
+            function hideComicLocationError() {
+                $('#kavita_comic_location_error_callout').hide();
+            }
+
             $('#kavita_sync_backfill_btn').click(function(e) {
                 e.preventDefault();
                 var $btn = $(this);
                 var csrfToken = $('#kavita_csrf_token').val();
 
+                hideComicLocationError();
                 $btn.prop('disabled', true);
 
                 $.ajax({
@@ -1116,6 +1214,7 @@
                     success: function(data) {
                         $btn.prop('disabled', false);
                         if (data && data.status === 'success') {
+                            hideComicLocationError();
                             $('#preview_total_series').text(data.total_candidate_series || 0);
                             $('#preview_unique_roots').text(data.unique_publisher_roots || 0);
                             $('#preview_already_active').text(data.already_active_count || 0);
@@ -1128,17 +1227,27 @@
                             $('#kavita_backfill_modal').fadeIn(150);
                         } else {
                             var msg = (data && data.message) ? data.message : 'Failed to analyze existing series library.';
-                            alert('Preview Error: ' + msg);
+                            if (data && data.error_code === 'comic_location_unavailable') {
+                                showComicLocationError(data, msg);
+                            } else {
+                                alert('Preview Error: ' + msg);
+                            }
                         }
                     },
                     error: function(xhr) {
                         $btn.prop('disabled', false);
                         var errMsg = 'Failed to analyze existing series library.';
+                        var errData = null;
                         try {
-                            var errData = JSON.parse(xhr.responseText);
+                            errData = JSON.parse(xhr.responseText);
                             if (errData && errData.message) errMsg = errData.message;
                         } catch(e) {}
-                        alert('Preview Error: ' + errMsg);
+
+                        if (errData && errData.error_code === 'comic_location_unavailable') {
+                            showComicLocationError(errData, errMsg);
+                        } else {
+                            alert('Preview Error: ' + errMsg);
+                        }
                     }
                 });
             });
@@ -1152,6 +1261,7 @@
                 var csrfToken = $('#kavita_csrf_token').val();
                 var $btn = $('#kavita_sync_backfill_btn');
                 $btn.prop('disabled', true);
+                hideComicLocationError();
 
                 $('#kavita_backfill_progress_card').slideDown(200);
                 $('#backfill_status_pill').removeClass('status-pill-clean status-pill-warn status-pill-error').addClass('status-pill-clean').text('STARTING');
@@ -1169,19 +1279,31 @@
                         } else {
                             $btn.prop('disabled', false);
                             var msg = (data && data.message) ? data.message : 'Failed to start synchronization.';
-                            $('#backfill_status_pill').removeClass('status-pill-clean').addClass('status-pill-error').text('FAILED');
-                            $('#backfill_current_info').html('<span style="color:#e04652;">' + htmlEscape(msg) + '</span>');
+                            if (data && data.error_code === 'comic_location_unavailable') {
+                                $('#kavita_backfill_progress_card').hide();
+                                showComicLocationError(data, msg);
+                            } else {
+                                $('#backfill_status_pill').removeClass('status-pill-clean').addClass('status-pill-error').text('FAILED');
+                                $('#backfill_current_info').html('<span style="color:#e04652;">' + htmlEscape(msg) + '</span>');
+                            }
                         }
                     },
                     error: function(xhr) {
                         $btn.prop('disabled', false);
                         var errMsg = 'Failed to start synchronization.';
+                        var errData = null;
                         try {
-                            var errData = JSON.parse(xhr.responseText);
+                            errData = JSON.parse(xhr.responseText);
                             if (errData && errData.message) errMsg = errData.message;
                         } catch(e) {}
-                        $('#backfill_status_pill').removeClass('status-pill-clean').addClass('status-pill-error').text('FAILED');
-                        $('#backfill_current_info').html('<span style="color:#e04652;">' + htmlEscape(errMsg) + '</span>');
+
+                        if (errData && errData.error_code === 'comic_location_unavailable') {
+                            $('#kavita_backfill_progress_card').hide();
+                            showComicLocationError(errData, errMsg);
+                        } else {
+                            $('#backfill_status_pill').removeClass('status-pill-clean').addClass('status-pill-error').text('FAILED');
+                            $('#backfill_current_info').html('<span style="color:#e04652;">' + htmlEscape(errMsg) + '</span>');
+                        }
                     }
                 });
             });
@@ -1294,6 +1416,14 @@
             // Preview handler for visual verification and testing
             try {
                 var urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('preview') === 'comic_location_error') {
+                    showComicLocationError({
+                        error_code: 'comic_location_unavailable',
+                        reason: 'not_found',
+                        message: 'Configured Comic Location does not exist: /missing_comics_mount',
+                        remediation: 'Verify that the Comic Location directory exists on disk and is mounted into the Mylar container, then retry.'
+                    });
+                }
                 if (urlParams.get('preview') === 'results') {
                     var $results = $('#kavita_diagnostics_results');
                     var $stateCard = $('#kavita_state_card');

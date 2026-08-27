@@ -251,11 +251,12 @@ class TestPhaseC3(unittest.TestCase):
         library_group = base_content.split('<div class="nav-group-title">Library</div>')[1].split('<div class="nav-group-title">Workspace</div>')[0]
         self.assertNotIn('data-nav="creators"', library_group)
 
-        # Confirm present in Settings -> Metadata & Identity
-        self.assertIn('<div class="nav-subgroup-title">Metadata &amp; Identity</div>', base_content)
-        self.assertIn('<a href="creators" class="nav-item nav-item--sub" data-nav="creators">', base_content)
+        # Confirm single primary Settings item in sidebar
+        self.assertIn('<div class="nav-group-title">Settings</div>', base_content)
+        self.assertIn('<a href="config" class="nav-item config" data-nav="config">', base_content)
+        self.assertNotIn('nav-subgroup', base_content)
 
-        # 2. Render creators.html and verify breadcrumbs
+        # 2. Render creators.html and verify Settings navigation tabs and breadcrumbs
         from mylar.webserve import WebInterface
         interface = WebInterface()
 

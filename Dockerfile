@@ -1,12 +1,24 @@
 # Stage 1: Build dependencies & wheels
 FROM python:3.11-alpine3.20 AS builder
 
+ARG UNRAR_VERSION="7.0.9"
+
 RUN apk add --no-cache \
     build-base \
     libffi-dev \
     zlib-dev \
     jpeg-dev \
-    git
+    git \
+    wget \
+    tar
+
+# Compile unrar from official RARLAB source
+RUN mkdir -p /tmp/unrar && \
+    wget -qO- https://www.rarlab.com/rar/unrarsrc-${UNRAR_VERSION}.tar.gz | tar -xz -C /tmp/unrar && \
+    cd /tmp/unrar/unrar && \
+    make -f makefile && \
+    install -v -m755 unrar /usr/bin/unrar && \
+    rm -rf /tmp/unrar
 
 WORKDIR /build
 
@@ -38,7 +50,13 @@ RUN apk add --no-cache \
     su-exec \
     libffi \
     zlib \
-    libjpeg-turbo
+    libjpeg-turbo \
+    libstdc++
+
+COPY --from=builder /usr/bin/unrar /usr/bin/unrar
+
+# Build-time runtime validation: verify unrar executes and dynamic libraries resolve in Stage 2
+RUN /usr/bin/unrar 2>&1 | grep -q "Alexander Roshal" || (echo "[BUILD ERROR] unrar executable failed or missing shared libraries in runtime image" && exit 1)
 
 WORKDIR /app/mylar3
 

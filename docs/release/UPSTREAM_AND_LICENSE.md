@@ -36,3 +36,12 @@ The complete license text is available in the root LICENSE file.
 In compliance with GPLv3 §6:
 - Source repository access: Distributed via Git repository and referenced in container OCI labels (org.opencontainers.image.source).
 - Build & Packaging: Local build instructions, Dockerfile, and CI/CD workflow files are included in the source tree.
+
+## 5. Third-Party Binary Components & Notices
+
+### UnRAR Extraction Utility (Container Image Component)
+- **Component**: `unrar` executable (built from official source tarball: `unrarsrc-7.0.9.tar.gz`)
+- **Source Origin**: [RARLAB](https://www.rarlab.com/rar/unrarsrc-7.0.9.tar.gz)
+- **Copyright**: Copyright (c) 1993–2024 Alexander Roshal
+- **License**: UnRAR Freeware License (extraction-only permission).
+- **Licensing Distinction**: UnRAR is **not** licensed under the GNU General Public License (GPLv3). It is included as a standalone container binary utility to provide RAR/CBR archive decompression capabilities to Mylar runtime workers and ComicTagger. Mylar invokes `unrar` as an independent subprocess tool.

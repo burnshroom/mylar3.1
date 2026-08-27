@@ -431,7 +431,54 @@
             </p>
             <a href="creators" class="btn-primary" style="display: inline-block; padding: 8px 18px; text-decoration: none;">Browse All Creator Credits</a>
         </div>
-    %else:
+        <!-- Settings Header -->
+        <div class="settings-header">
+            <div class="settings-title-group">
+                <h1 class="settings-main-title">Settings</h1>
+            </div>
+            <div class="settings-header-actions">
+                <a href="carepackage" class="btn btn-secondary"><i class="fa fa-life-ring"></i> Care Package</a>
+                <a href="restart" class="btn btn-secondary"><i class="fa fa-refresh"></i> Restart</a>
+                <a href="shutdown" class="btn btn-danger"><i class="fa fa-power-off"></i> Shut Down</a>
+            </div>
+        </div>
+
+        <!-- Modern Settings Navigation Tabs -->
+        <div class="settings-nav-tabs" role="tablist" aria-label="Settings Navigation">
+            <a href="config#tabs-1" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <span>General</span>
+            </a>
+            <a href="config#tabs-2" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                <span>Web Interface</span>
+            </a>
+            <a href="config#tabs-3" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Download Settings</span>
+            </a>
+            <a href="config#tabs-4" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>Search Providers</span>
+            </a>
+            <a href="config#tabs-5" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                <span>Quality &amp; Post-Processing</span>
+            </a>
+            <a href="config#tabs-6" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                <span>Advanced Settings</span>
+            </a>
+            <a href="creators" class="settings-nav-tab active" role="tab" aria-selected="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Metadata &amp; Identity</span>
+            </a>
+            <a href="kavita_diagnostics" class="settings-nav-tab" role="tab">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <span>Integrations</span>
+            </a>
+        </div>
+
         <nav class="creator-breadcrumb" aria-label="Breadcrumb">
             <a href="config">Settings</a>
             <span class="creator-breadcrumb-sep">/</span>

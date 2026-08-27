@@ -598,6 +598,106 @@ class TestPhaseK8KavitaBackfill(unittest.TestCase):
         self.assertFalse(hasattr(KavitaPublisherService, '_custom_db'))
         self.assertFalse(isinstance(getattr(KavitaPublisherService, '_db', None), property))
 
+    def test_21_comic_location_validation_blank_or_unset(self):
+        """Blank/unset COMIC_DIR fails with comic_location_unavailable (reason=not_configured) with zero Kavita calls."""
+        mylar.CONFIG.COMIC_DIR = ""
+
+        # 1. Preview rejection
+        preview_res = self.worker.compute_preview()
+        self.assertEqual(preview_res['status'], 'error')
+        self.assertEqual(preview_res['error_code'], 'comic_location_unavailable')
+        self.assertEqual(preview_res['reason'], 'not_configured')
+        self.assertIn('not configured', preview_res['message'])
+        self.assertIn('remediation', preview_res)
+        self.assertEqual(len(self.transport.call_history), 0, "Preview must make 0 Kavita calls on blank COMIC_DIR")
+
+        # 2. Start rejection before job creation
+        start_res = self.worker.start_backfill(service=self.service_factory)
+        self.assertEqual(start_res['status'], 'error')
+        self.assertEqual(start_res['error_code'], 'comic_location_unavailable')
+        self.assertEqual(start_res['reason'], 'not_configured')
+        self.assertIsNone(self.worker._state['job_id'], "No job_id must be assigned when start is rejected")
+        self.assertEqual(self.worker._state['status'], 'idle')
+        self.assertEqual(len(self.transport.call_history), 0, "Start must make 0 Kavita calls on blank COMIC_DIR")
+
+    def test_22_comic_location_validation_nonexistent_directory(self):
+        """Nonexistent COMIC_DIR fails with comic_location_unavailable (reason=not_found) with zero Kavita calls."""
+        nonexistent_dir = os.path.join(self.test_dir, 'does_not_exist_comics')
+        mylar.CONFIG.COMIC_DIR = nonexistent_dir
+
+        # 1. Preview rejection
+        preview_res = self.worker.compute_preview()
+        self.assertEqual(preview_res['status'], 'error')
+        self.assertEqual(preview_res['error_code'], 'comic_location_unavailable')
+        self.assertEqual(preview_res['reason'], 'not_found')
+        self.assertIn('does not exist', preview_res['message'])
+        self.assertEqual(preview_res['configured_path'], nonexistent_dir)
+        self.assertEqual(len(self.transport.call_history), 0, "Preview must make 0 Kavita calls on missing COMIC_DIR")
+
+        # 2. Start rejection before job creation
+        start_res = self.worker.start_backfill(service=self.service_factory)
+        self.assertEqual(start_res['status'], 'error')
+        self.assertEqual(start_res['error_code'], 'comic_location_unavailable')
+        self.assertEqual(start_res['reason'], 'not_found')
+        self.assertIsNone(self.worker._state['job_id'], "No job_id must be assigned when start is rejected")
+        self.assertEqual(self.worker._state['status'], 'idle')
+        self.assertEqual(len(self.transport.call_history), 0, "Start must make 0 Kavita calls on missing COMIC_DIR")
+
+    def test_23_comic_location_validation_file_not_directory(self):
+        """File (not a directory) COMIC_DIR fails with comic_location_unavailable (reason=not_a_directory)."""
+        regular_file = os.path.join(self.test_dir, 'not_a_dir.txt')
+        with open(regular_file, 'w', encoding='utf-8') as f:
+            f.write('just a regular file')
+        mylar.CONFIG.COMIC_DIR = regular_file
+
+        # 1. Preview rejection
+        preview_res = self.worker.compute_preview()
+        self.assertEqual(preview_res['status'], 'error')
+        self.assertEqual(preview_res['error_code'], 'comic_location_unavailable')
+        self.assertEqual(preview_res['reason'], 'not_a_directory')
+        self.assertIn('not a directory', preview_res['message'])
+        self.assertEqual(len(self.transport.call_history), 0, "Preview must make 0 Kavita calls on invalid COMIC_DIR")
+
+        # 2. Start rejection before job creation
+        start_res = self.worker.start_backfill(service=self.service_factory)
+        self.assertEqual(start_res['status'], 'error')
+        self.assertEqual(start_res['error_code'], 'comic_location_unavailable')
+        self.assertEqual(start_res['reason'], 'not_a_directory')
+        self.assertIsNone(self.worker._state['job_id'])
+        self.assertEqual(len(self.transport.call_history), 0)
+
+    def test_24_comic_location_rejection_logs_sanitized_warning(self):
+        """Rejection emits dedicated log event with zero leaked secrets, full instance UUIDs, or tracebacks."""
+        nonexistent_dir = os.path.join(self.test_dir, 'nonexistent_test_dir')
+        mylar.CONFIG.COMIC_DIR = nonexistent_dir
+
+        with patch('mylar.logger.warn') as mock_warn:
+            self.worker.compute_preview()
+
+            mock_warn.assert_called()
+            log_msg = str(mock_warn.call_args[0][0])
+            self.assertIn('[KAVITA-BACKFILL] comic_location_unavailable', log_msg)
+            self.assertIn('reason=not_found', log_msg)
+            self.assertNotIn('test-secret-key', log_msg)
+            self.assertNotIn('http://127.0.0.1:5000', log_msg)
+            self.assertNotIn('Traceback', log_msg)
+            self.assertNotIn('mylar-test-inst-k8', log_msg)
+
+    def test_25_modern_template_contains_comic_location_error_callout(self):
+        """Modern Kavita diagnostics template includes structured in-page error callout and retry guidance."""
+        kavita_diag_path = os.path.join(REPO_ROOT, 'data', 'interfaces', 'modern', 'kavita_diagnostics.html')
+        with open(kavita_diag_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn('id="kavita_comic_location_error_callout"', content)
+        self.assertIn('Mylar Comic Location unavailable', content)
+        self.assertIn('comic_location_unavailable', content)
+        self.assertIn('id="kavita_comic_loc_error_details"', content)
+        self.assertIn('id="kavita_comic_loc_error_reason"', content)
+        self.assertIn('id="kavita_comic_loc_error_remediation"', content)
+        self.assertIn('showComicLocationError', content)
+        self.assertIn('hideComicLocationError', content)
+
 
 if __name__ == '__main__':
     unittest.main()

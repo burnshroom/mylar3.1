@@ -2846,157 +2846,239 @@ class WebInterface(object):
         threading.Thread(target=self.queueissue, kwargs=kwargs).start()
     queueit.exposed = True
 
-    def queueissue(self, mode, ComicName=None, ComicID=None, ComicYear=None, ComicIssue=None, IssueID=None, new=False, redirect=None, SeriesYear=None, SARC=None, IssueArcID=None, manualsearch=None, Publisher=None, pullinfo=None, pullweek=None, pullyear=None, manual=False, ComicVersion=None, BookType=None):
-        logger.fdebug('ComicID: %s' % ComicID)
-        logger.fdebug('mode: %s' % mode)
-        now = datetime.datetime.now()
-        myDB = db.DBConnection()
-        #mode dictates type of queue - either 'want' for individual comics, or 'series' for series watchlist.
-        if ComicID is None and mode == 'series':
-            issue = None
-            raise cherrypy.HTTPRedirect("searchit?name=%s&issue=%s&mode=%s" % (ComicName, 'None', 'series'))
-        elif ComicID is None and mode == 'pullseries':
-            # we can limit the search by including the issue # and searching for
-            # comics that have X many issues
-            raise cherrypy.HTTPRedirect("searchit?name=%s&issue=%s&mode=%s" % (ComicName, 'None', 'pullseries'))
-        elif ComicID is None and mode == 'readlist':
-            # this is for marking individual comics from a readlist to be downloaded.
-            # Because there is no associated ComicID or IssueID, follow same pattern as in 'pullwant'
-            # except we know the Year
-            if len(ComicYear) > 4:
-                ComicYear = ComicYear[:4]
-            if SARC is None:
-                # it's just a readlist queue (no storyarc mode enabled)
-                SARC = True
-                IssueArcID = None
-            else:
-                logger.info('Story Arc : %s queueing selected issue...' % SARC)
-                logger.fdebug('IssueArcID : %s' % IssueArcID)
-                #try to load the issue dates - can now sideload issue details.
-                dateload = myDB.selectone('SELECT * FROM storyarcs WHERE IssueArcID=?', [IssueArcID]).fetchone()
-                if dateload is None:
-                    IssueDate = None
-                    ReleaseDate = None
-                    Publisher = None
-                    SeriesYear = None
+    def queueissue(self, mode=None, ComicName=None, ComicID=None, ComicYear=None, ComicIssue=None, IssueID=None, new=False, redirect=None, SeriesYear=None, SARC=None, IssueArcID=None, manualsearch=None, Publisher=None, pullinfo=None, pullweek=None, pullyear=None, manual=False, ComicVersion=None, BookType=None):
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.headers['Content-Type'] = 'application/json'
+
+        try:
+            logger.fdebug('ComicID: %s' % ComicID)
+            logger.fdebug('mode: %s' % mode)
+            now = datetime.datetime.now()
+            myDB = db.DBConnection()
+
+            # 1. Mode: series / pullseries redirect modes
+            if ComicID is None and mode == 'series':
+                raise cherrypy.HTTPRedirect("searchit?name=%s&issue=%s&mode=%s" % (ComicName, 'None', 'series'))
+            elif ComicID is None and mode == 'pullseries':
+                raise cherrypy.HTTPRedirect("searchit?name=%s&issue=%s&mode=%s" % (ComicName, 'None', 'pullseries'))
+
+            # 2. Mode: readlist (story arc queueing)
+            elif mode == 'readlist' and (IssueArcID is not None or ComicID is None):
+                if ComicYear and len(ComicYear) > 4:
+                    ComicYear = ComicYear[:4]
+                if SARC is None:
+                    SARC = True
+                    IssueArcID = None
                 else:
-                    IssueDate = dateload['IssueDate']
-                    ReleaseDate = dateload['ReleaseDate']
-                    Publisher = dateload['IssuePublisher']
-                    SeriesYear = dateload['SeriesYear']
-                    BookType = dateload['Type']
+                    logger.info('Story Arc : %s queueing selected issue...' % SARC)
+                    logger.fdebug('IssueArcID : %s' % IssueArcID)
+                    dateload = myDB.selectone('SELECT * FROM storyarcs WHERE IssueArcID=?', [IssueArcID]).fetchone()
+                    if dateload is None:
+                        IssueDate = None
+                        ReleaseDate = None
+                        Publisher = None
+                        SeriesYear = None
+                        BookType = None
+                    else:
+                        IssueDate = dateload['IssueDate']
+                        ReleaseDate = dateload['ReleaseDate']
+                        Publisher = dateload['IssuePublisher']
+                        SeriesYear = dateload['SeriesYear']
+                        BookType = dateload['Type']
 
-            if ComicYear is None: ComicYear = SeriesYear
-            if dateload['Volume'] is None:
-                logger.info('Marking %s #%s as wanted...' % (ComicName, ComicIssue))
-            else:
-                logger.info('Marking %s (%s) #%s as wanted...' % (ComicName, dateload['Volume'], ComicIssue))
-            logger.fdebug('publisher: %s' % Publisher)
-            controlValueDict = {"IssueArcID": IssueArcID}
-            newStatus = {"Status": "Wanted"}
-            myDB.upsert("storyarcs", newStatus, controlValueDict)
-            moduletype = '[STORY-ARCS]'
-            passinfo = {'issueid':     IssueArcID,
-                        'comicname':   ComicName,
-                        'seriesyear':  SeriesYear,
-                        'comicid':     ComicID,
-                        'issuenumber': ComicIssue,
-                        'booktype':    BookType}
+                if ComicYear is None: ComicYear = SeriesYear
+                if 'dateload' in locals() and dateload and dateload['Volume'] is not None:
+                    logger.info('Marking %s (%s) #%s as wanted...' % (ComicName, dateload['Volume'], ComicIssue))
+                else:
+                    logger.info('Marking %s #%s as wanted...' % (ComicName, ComicIssue))
+                logger.fdebug('publisher: %s' % Publisher)
+                controlValueDict = {"IssueArcID": IssueArcID}
+                newStatus = {"Status": "Wanted"}
+                myDB.upsert("storyarcs", newStatus, controlValueDict)
+                moduletype = '[STORY-ARCS]'
+                passinfo = {'issueid':     IssueArcID,
+                            'comicname':   ComicName,
+                            'seriesyear':  SeriesYear,
+                            'comicid':     ComicID,
+                            'issuenumber': ComicIssue,
+                            'booktype':    BookType,
+                            'manual':      bool(manualsearch)}
 
-        elif mode == 'pullwant':  #and ComicID is None
-            #this is for marking individual comics from the pullist to be downloaded.
-            #--comicid & issueid may both be known (or either) at any given point if alt_pull = 2
-            #because ComicID and IssueID will both be None due to pullist, it's probably
-            #better to set both to some generic #, and then filter out later...
-            IssueDate = pullinfo
-            try:
-                SeriesYear = IssueDate[:4]
-            except:
-                SeriesYear == now.year
-            if Publisher == 'COMICS': Publisher = None
-            moduletype = '[PULL-LIST]'
-            passinfo = {'issueid':     IssueID,
-                        'comicname':   ComicName,
-                        'seriesyear':  SeriesYear,
-                        'comicid':     ComicID,
-                        'issuenumber': ComicIssue,
-                        'booktype':    BookType}
+            # 3. Mode: pullwant (pullist single issue queueing)
+            elif mode == 'pullwant':
+                IssueDate = pullinfo
+                try:
+                    SeriesYear = IssueDate[:4] if IssueDate else str(now.year)
+                except Exception:
+                    SeriesYear = str(now.year)
+                if Publisher == 'COMICS': Publisher = None
+                moduletype = '[PULL-LIST]'
+                passinfo = {'issueid':     IssueID,
+                            'comicname':   ComicName,
+                            'seriesyear':  SeriesYear,
+                            'comicid':     ComicID,
+                            'issuenumber': ComicIssue,
+                            'booktype':    BookType,
+                            'manual':      bool(manualsearch)}
 
-        elif mode == 'want' or mode == 'want_ann' or manualsearch:
-            cdname = myDB.selectone("SELECT * from comics where ComicID=?", [ComicID]).fetchone()
-            if ComicName is None:
+            # 4. Mode: want, want_ann (explicit issue and annual queue modes)
+            elif mode in ('want', 'want_ann'):
+                # Validate ComicID
+                if not ComicID or str(ComicID).strip() in ('', 'None', 'null'):
+                    logger.warn('[QUEUE-ISSUE] comic_id_missing: Missing ComicID for issue queue action.')
+                    if hasattr(cherrypy, 'response'):
+                        cherrypy.response.status = 400
+                    return json.dumps({
+                        'status': 'error',
+                        'status_code': 400,
+                        'message': 'Missing ComicID for issue queue action.',
+                        'error_code': 'comic_id_missing'
+                    })
+
+                # Validate IssueID
+                if not IssueID or str(IssueID).strip() in ('', 'None', 'null'):
+                    logger.warn('[QUEUE-ISSUE] issue_id_missing: Missing IssueID for issue queue action (ComicID=%s).' % ComicID)
+                    if hasattr(cherrypy, 'response'):
+                        cherrypy.response.status = 400
+                    return json.dumps({
+                        'status': 'error',
+                        'status_code': 400,
+                        'message': 'Missing IssueID for issue queue action.',
+                        'error_code': 'issue_id_missing'
+                    })
+
+                # Validate comic exists in DB
+                cdname = myDB.selectone("SELECT * from comics where ComicID=?", [ComicID]).fetchone()
+                if cdname is None:
+                    logger.warn('[QUEUE-ISSUE] comic_not_found: Comic with ComicID %s not found in database.' % ComicID)
+                    if hasattr(cherrypy, 'response'):
+                        cherrypy.response.status = 404
+                    return json.dumps({
+                        'status': 'error',
+                        'status_code': 404,
+                        'message': 'Comic series with ID %s could not be found.' % ComicID,
+                        'error_code': 'comic_not_found'
+                    })
+
+                # Resolve issue row based on explicit mode
+                is_annual = (mode == 'want_ann')
+                issue_row = None
+                annual_row = None
+
+                if is_annual:
+                    annual_row = myDB.selectone("SELECT * FROM annuals WHERE ComicID=? and IssueID=? AND NOT Deleted", [ComicID, IssueID]).fetchone()
+                else:
+                    issue_row = myDB.selectone("SELECT * FROM issues WHERE ComicID=? and IssueID=?", [ComicID, IssueID]).fetchone()
+
+                if (is_annual and annual_row is None) or (not is_annual and issue_row is None):
+                    logger.warn('[QUEUE-ISSUE] issue_not_found: Issue with IssueID %s not found for ComicID %s.' % (IssueID, ComicID))
+                    if hasattr(cherrypy, 'response'):
+                        cherrypy.response.status = 404
+                    return json.dumps({
+                        'status': 'error',
+                        'status_code': 404,
+                        'message': 'Issue with ID %s could not be found in database.' % IssueID,
+                        'error_code': 'issue_not_found'
+                    })
+
+                # Extract series & issue metadata
                 ComicName = cdname['ComicName']
-            ComicName_Filesafe = cdname['ComicName_Filesafe']
-            SeriesYear = cdname['ComicYear']
-            AlternateSearch = cdname['AlternateSearch']
-            Publisher = cdname['ComicPublisher']
-            UseAFuzzy = cdname['UseFuzzy']
-            AllowPacks= cdname['AllowPacks']
-            ComicVersion = cdname['ComicVersion']
-            ComicName = cdname['ComicName']
-            TorrentID_32p = cdname['TorrentID_32P']
-            BookType = cdname['Type']
-            if cdname['Corrected_Type'] is not None:
-                BookType = cdname['Corrected_Type']
-            controlValueDict = {"IssueID": IssueID}
-            newStatus = {"Status": "Wanted"}
-            if mode == 'want':
-                if manualsearch:
-                    logger.info('Initiating manual search for %s issue: %s' % (ComicName, ComicIssue))
+                SeriesYear = cdname['ComicYear']
+                Publisher = cdname['ComicPublisher']
+                BookType = cdname['Corrected_Type'] if cdname['Corrected_Type'] is not None else cdname['Type']
+                controlValueDict = {"IssueID": IssueID}
+                newStatus = {"Status": "Wanted"}
+                is_manual_search = bool(manual or (manualsearch is not None and str(manualsearch).strip().lower() in ('true', '1', 'yes')))
+
+                if is_annual:
+                    if annual_row and annual_row['ReleaseComicName']:
+                        ComicName = annual_row['ReleaseComicName']
+                    if ComicIssue is None and annual_row and annual_row['Issue_Number']:
+                        ComicIssue = annual_row['Issue_Number']
+                    if is_manual_search:
+                        logger.info('Initiating manual search for %s : %s' % (ComicName, ComicIssue))
+                    else:
+                        logger.info('Marking %s : %s as wanted...' % (ComicName, ComicIssue))
+                        myDB.upsert("annuals", newStatus, controlValueDict)
+                    issues_meta = annual_row
                 else:
-                    logger.info('Marking %s issue: %s as wanted...' % (ComicName, ComicIssue))
-                    myDB.upsert("issues", newStatus, controlValueDict)
+                    if ComicIssue is None and issue_row and issue_row['Issue_Number']:
+                        ComicIssue = issue_row['Issue_Number']
+                    if is_manual_search:
+                        logger.info('Initiating manual search for %s issue: %s' % (ComicName, ComicIssue))
+                    else:
+                        logger.info('Marking %s issue: %s as wanted...' % (ComicName, ComicIssue))
+                        myDB.upsert("issues", newStatus, controlValueDict)
+                    issues_meta = issue_row
+
+                if ComicYear is None and issues_meta and issues_meta['IssueDate']:
+                    ComicYear = str(issues_meta['IssueDate'])[:4]
+
+                moduletype = '[WANTED-SEARCH]'
+                passinfo = {
+                    'issueid': IssueID,
+                    'comicname': ComicName,
+                    'seriesyear': SeriesYear,
+                    'comicid': ComicID,
+                    'issuenumber': ComicIssue,
+                    'booktype': BookType,
+                    'manual': is_manual_search
+                }
+
             else:
-                annual_name = myDB.selectone("SELECT * FROM annuals WHERE ComicID=? and IssueID=? AND NOT Deleted", [ComicID, IssueID]).fetchone()
-                if annual_name is None:
-                    logger.fdebug('Unable to locate.')
-                else:
-                    ComicName = annual_name['ReleaseComicName']
+                # Unsupported mode or invalid request (including unsupported 'force')
+                logger.warn('[QUEUE-ISSUE] invalid_mode: Unsupported mode "%s" for ComicID %s, IssueID %s.' % (mode, ComicID, IssueID))
+                if hasattr(cherrypy, 'response'):
+                    cherrypy.response.status = 400
+                return json.dumps({
+                    'status': 'error',
+                    'status_code': 400,
+                    'message': 'Invalid or unsupported queue mode "%s".' % mode,
+                    'error_code': 'invalid_mode'
+                })
 
-                if manualsearch:
-                    logger.info('Initiating manual search for %s : %s' % (ComicName, ComicIssue))
-                else:
-                    logger.info('Marking %s : %s as wanted...' % (ComicName, ComicIssue))
-                    myDB.upsert("annuals", newStatus, controlValueDict)
-            moduletype = '[WANTED-SEARCH]'
-            passinfo = {'issueid': IssueID,
-                        'comicname': ComicName,
-                        'seriesyear': SeriesYear,
-                        'comicid': ComicID,
-                        'issuenumber': ComicIssue,
-                        'booktype': BookType,
-                        'manual': manualsearch}
-
-
-            if mode == 'want':
-                issues = myDB.selectone("SELECT IssueDate, ReleaseDate FROM issues WHERE IssueID=?", [IssueID]).fetchone()
-            elif mode == 'want_ann':
-                issues = myDB.selectone("SELECT IssueDate, ReleaseDate FROM annuals WHERE IssueID=? AND NOT Deleted", [IssueID]).fetchone()
-            if ComicYear == None:
-                ComicYear = str(issues['IssueDate'])[:4]
-            if issues['ReleaseDate'] is None or issues['ReleaseDate'] == '0000-00-00':
-                logger.info('No Store Date found for given issue. This is probably due to not Refreshing the Series beforehand.')
-                logger.info('I Will assume IssueDate as Store Date, but you should probably Refresh the Series and try again if required.')
-                storedate = issues['IssueDate']
+            if any([BookType == 'TPB', BookType == 'HC', BookType == 'GN']):
+                logger.info('%s[%s] Now Queueing %s (%s) for search' % (moduletype, BookType, ComicName, SeriesYear))
+            elif ComicIssue is None:
+                logger.info('%s Now Queueing %s (%s) for search' % (moduletype, ComicName, SeriesYear))
             else:
-                storedate = issues['ReleaseDate']
+                logger.info('%s Now Queueing %s (%s) #%s for search' % (moduletype, ComicName, SeriesYear, ComicIssue))
 
-        if any([BookType == 'TPB', BookType == 'HC', BookType == 'GN']):
-            logger.info('%s[%s] Now Queueing %s (%s) for search' % (moduletype, BookType, ComicName, SeriesYear))
-        elif ComicIssue is None:
-            logger.info('%s Now Queueing %s (%s) for search' % (moduletype, ComicName, SeriesYear))
-        else:
-            logger.info('%s Now Queueing %s (%s) #%s for search' % (moduletype, ComicName, SeriesYear, ComicIssue))
+            if getattr(mylar, 'SEARCH_QUEUE', None) is not None:
+                mylar.SEARCH_QUEUE.put(passinfo)
 
-        #s = mylar.SEARCH_QUEUE.put({'issueid': IssueID, 'comicname': ComicName, 'seriesyear': SeriesYear, 'comicid': ComicID, 'issuenumber': ComicIssue, 'booktype': BookType})
-        s = mylar.SEARCH_QUEUE.put(passinfo)
-        #if manualsearch:
-        #    # if it's a manual search, return to null here so the thread will die and not cause http redirect errors.
-        #    return
-        if ComicID:
-            return json.dumps({'status': 'success', 'comicid': ComicID, 'comicname': ComicName, 'seriesyear': SeriesYear, 'tables': 'table', 'message': 'Successfully submitted search for %s #%s...' % (ComicName, ComicIssue)})
-        else:
-            return
+            if ComicID:
+                return json.dumps({
+                    'status': 'success',
+                    'status_code': 200,
+                    'comicid': ComicID,
+                    'comicname': ComicName,
+                    'issueid': IssueID,
+                    'issuenumber': ComicIssue,
+                    'seriesyear': SeriesYear,
+                    'tables': 'table',
+                    'message': 'Successfully submitted search for %s #%s...' % (ComicName, ComicIssue or '')
+                })
+            else:
+                return json.dumps({
+                    'status': 'success',
+                    'status_code': 200,
+                    'message': 'Successfully submitted search request.'
+                })
+
+        except cherrypy.HTTPRedirect:
+            raise
+        except Exception:
+            logger.error('[QUEUE-ISSUE] queue_issue_error: An unexpected error occurred while queuing issue (ComicID=%s, IssueID=%s).' % (ComicID, IssueID))
+            if hasattr(cherrypy, 'response'):
+                cherrypy.response.headers['Content-Type'] = 'application/json'
+                cherrypy.response.status = 500
+            return json.dumps({
+                'status': 'error',
+                'status_code': 500,
+                'message': 'An unexpected server error occurred while queuing the issue.',
+                'error_code': 'queue_issue_error'
+            })
     queueissue.exposed = True
 
     def unqueueissue(self, IssueID, ComicID, ComicName=None, Issue=None, smode=None, ReleaseComicID=None):
@@ -6826,7 +6908,7 @@ class WebInterface(object):
 
     pretty_git.exposed = True
     #---
-    def config(self):
+    def config(self, tab=None, **kwargs):
         interface_dir = os.path.join(mylar.PROG_DIR, 'data', 'interfaces')
         interface_list = [name for name in os.listdir(interface_dir) if os.path.isdir(os.path.join(interface_dir, name))]
 #----
@@ -7193,7 +7275,7 @@ class WebInterface(object):
                     "kavita_has_api_key": bool(getattr(mylar.CONFIG, 'KAVITA_API_KEY', None)),
                     "mylar_instance_slug": mylar.config.get_mylar_instance_slug(),
                }
-        return serve_template(templatename="config.html", title="Settings", config=config, comicinfo=comicinfo)
+        return serve_template(templatename="config.html", title="Settings", config=config, comicinfo=comicinfo, tab=tab)
     config.exposed = True
 
     def error_change(self, comicid, errorgcd, comicname, comicyear, imported=None, mogcname=None):

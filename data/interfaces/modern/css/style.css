@@ -6780,3 +6780,385 @@ body.modal-open {
     justify-content: flex-start;
   }
 }
+
+/* ─── MODERN SETTINGS INTERFACE ─── */
+#main:has(.settings-page-container) #subhead,
+#subhead:has(#subhead_container[style*="display:none"]),
+#subhead:has(#subhead_container[style*="display: none"]) {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+.settings-page-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 20px 80px 20px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.settings-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-main-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text, #f8fafc);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.settings-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Settings Primary Nav Tabs */
+.settings-nav-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: var(--color-surface-elevated, #1a202c);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius-md, 10px);
+}
+
+.settings-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #94a3b8);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.settings-nav-tab:hover {
+  color: var(--color-text, #f8fafc);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-nav-tab.active {
+  color: #fff;
+  background: var(--color-accent, #ef4444);
+  font-weight: 600;
+}
+
+.settings-nav-tab-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-weight: 600;
+}
+
+/* Settings Tab Panes */
+.settings-tab-pane {
+  display: none !important;
+}
+
+.settings-tab-pane.active {
+  display: block !important;
+}
+
+/* Settings Cards & Layout */
+.settings-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.settings-grid-1col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.settings-card {
+  background: var(--color-surface, #11161d);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius-md, 10px);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.settings-card-header {
+  padding: 14px 20px;
+  background: var(--color-surface-alt, #0f141c);
+  border-bottom: 1px solid var(--color-border, #2d3748);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+  margin: 0;
+}
+
+.settings-card-body {
+  padding: 20px;
+}
+
+.settings-card-footer {
+  padding: 14px 20px;
+  background: var(--color-surface-alt, #0f141c);
+  border-top: 1px solid var(--color-border, #2d3748);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settings-row {
+  margin-bottom: 16px;
+}
+
+.settings-row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-row-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+  margin-bottom: 6px;
+}
+
+.settings-help {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-muted, #64748b);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.settings-input,
+.settings-select {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface-elevated, #1a202c);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-text, #f8fafc);
+  padding: 8px 12px;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-input:focus,
+.settings-select:focus {
+  border-color: var(--color-accent, #ef4444);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.settings-input-sm {
+  max-width: 120px;
+}
+
+.settings-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--color-text, #f8fafc);
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-checkbox {
+  accent-color: var(--color-accent, #ef4444);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.settings-provider-group {
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius-sm, 6px);
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--color-surface-elevated, #1a202c);
+}
+
+.settings-provider-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text, #f8fafc);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Save Bar */
+.settings-save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border, #2d3748);
+}
+
+@media (max-width: 900px) {
+  .settings-grid-2col {
+    grid-template-columns: 1fr;
+  }
+  .settings-input,
+  .settings-select {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .settings-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .settings-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .settings-nav-tabs {
+    padding: 3px;
+    gap: 4px;
+  }
+  .settings-nav-tab {
+    padding: 6px 12px;
+    font-size: 12.5px;
+  }
+}
+
+/* Modern Config Table & Fieldsets */
+.settings-page-container table.configtable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 20px 0;
+  margin: 0 -10px;
+}
+
+.settings-page-container table.configtable > tbody > tr > td,
+.settings-page-container table.configtable > tr > td {
+  vertical-align: top;
+  width: 50%;
+  padding: 0 10px;
+}
+
+.settings-page-container fieldset {
+  background: var(--color-surface, #11161d);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius-md, 10px);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.settings-page-container legend {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text, #f8fafc);
+  padding: 0 8px;
+}
+
+.settings-page-container .row {
+  margin-bottom: 14px;
+}
+
+.settings-page-container .row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-page-container label {
+  color: var(--color-text, #f8fafc);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-page-container input[type="text"],
+.settings-page-container input[type="password"],
+.settings-page-container select {
+  background: var(--color-surface-elevated, #1a202c);
+  border: 1px solid var(--color-border, #2d3748);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-text, #f8fafc);
+  padding: 7px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-page-container input[type="text"]:focus,
+.settings-page-container input[type="password"]:focus,
+.settings-page-container select:focus {
+  border-color: var(--color-accent, #ef4444);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.settings-page-container small {
+  color: var(--color-text-muted, #64748b);
+  display: block;
+  font-size: 11.5px;
+  margin-top: 3px;
+}
+
+.settings-page-container input[type="checkbox"],
+.settings-page-container input[type="radio"] {
+  accent-color: var(--color-accent, #ef4444);
+}
+
+@media (max-width: 900px) {
+  .settings-page-container table.configtable {
+    display: block;
+    margin: 0;
+  }
+  .settings-page-container table.configtable > tbody,
+  .settings-page-container table.configtable > tbody > tr,
+  .settings-page-container table.configtable > tr {
+    display: block;
+  }
+  .settings-page-container table.configtable > tbody > tr > td,
+  .settings-page-container table.configtable > tr > td {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin-bottom: 20px;
+  }
+}

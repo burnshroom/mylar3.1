@@ -1809,26 +1809,40 @@
                  reload_tables();
             });
         }
-        function add_wanted(issueid, comicid, issuenumber, mode, msearch){
-            $.when($.ajax({
+        function add_wanted(issueid, comicid, issuenumber, mode, msearch, callback){
+            $.ajax({
                  type: "GET",
                  url: "queueissue",
                  data: { IssueID: issueid, mode: mode, ComicIssue: issuenumber, ComicID: comicid, manualsearch: msearch },
+                 dataType: "json",
                  success: function(response) {
-                    obj = JSON.parse(response);
-                    $('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-check'></span>"+obj['message']+"</div>");
-                    if (obj['status'] == 'success'){
-                        $('#ajaxMsg').addClass('success').fadeIn().delay(3000).fadeOut();
+                    var obj = (typeof response === 'string') ? JSON.parse(response) : response;
+                    if (obj && obj['status'] == 'success'){
+                        $('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-check'></span>"+(obj['message'] || 'Successfully submitted search.')+"</div>");
+                        $('#ajaxMsg').removeClass('error').addClass('success').fadeIn().delay(3000).fadeOut();
+                        if (typeof callback === 'function') callback(null, obj);
                     } else {
-                        $('#ajaxMsg').addClass('error').fadeIn().delay(3000).fadeOut();
+                        var errMsg = (obj && obj['message']) ? obj['message'] : 'Failed to queue issue.';
+                        $('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-alert'></span>"+errMsg+"</div>");
+                        $('#ajaxMsg').removeClass('success').addClass('error').fadeIn().delay(3000).fadeOut();
+                        if (typeof callback === 'function') callback(new Error(errMsg), obj);
                     }
                  },
-                 error: function(data)
-                     {
-                       alert('ERROR'+data.responseText);
-                     },
-            })).done(function(data) {
-                 //reload_table();
+                 error: function(data) {
+                    var errMsg = 'Failed to queue issue for search.';
+                    var errCode = 'queue_issue_error';
+                    try {
+                        var errObj = JSON.parse(data.responseText);
+                        if (errObj && errObj.message) errMsg = errObj.message;
+                        if (errObj && errObj.error_code) errCode = errObj.error_code;
+                    } catch(e) {
+                        if (data.status === 404) errMsg = 'Issue or comic series not found.';
+                        else if (data.status === 400) errMsg = 'Invalid queue request parameters.';
+                        else if (data.status >= 500) errMsg = 'Server error while queuing issue.';
+                    }
+                    $('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-alert'></span>"+errMsg+"</div>").removeClass('success').addClass('error').fadeIn().delay(3000).fadeOut();
+                    if (typeof callback === 'function') callback(new Error(errMsg), { status: 'error', error_code: errCode, message: errMsg });
+                 },
             });
         }                
 
@@ -2400,11 +2414,33 @@
         // Wire Inspector Action Buttons
         $(document).on('click', '#inspectorActionSearch', function(e) {
             e.preventDefault();
-            var iid = $(this).attr('data-issueid');
-            var issNum = $(this).attr('data-issuenum');
+            var $btn = $(this);
+            if ($btn.hasClass('disabled') || $btn.prop('disabled') || $btn.hasClass('pending')) {
+                return;
+            }
+
+            var iid = $btn.attr('data-issueid');
+            var issNum = $btn.attr('data-issuenum');
             var cid = retrieve_comicid();
-            $(this).html('<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg> Queued');
-            add_wanted(iid, cid, issNum, 'force', true);
+            var scope = _currentInspectorScope;
+            var mode = (scope === 'annuals' ? 'want_ann' : 'want');
+            var originalHtml = $btn.html();
+
+            // Set temporary loading state on button
+            $btn.addClass('pending').prop('disabled', true);
+            $btn.html('<svg class="btn-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="12"/></svg> Searching…');
+
+            add_wanted(iid, cid, issNum, mode, true, function(err, result) {
+                $btn.removeClass('pending');
+                if (!err && result && result.status === 'success') {
+                    // Confirmed success: update button state to Search Queued
+                    $btn.html('<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Search Queued');
+                    $btn.prop('disabled', true);
+                } else {
+                    // On failure: restore original button state
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
         });
 
         $(document).on('click', '#inspectorActionMetatag', function(e) {
