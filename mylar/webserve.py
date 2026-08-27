@@ -2360,118 +2360,179 @@ class WebInterface(object):
         issuestoArchive = []
         tier1_cnt = 0
         tier2_cnt = 0
+
+        if action is None and 'action' in args:
+            action = args.pop('action')
+
         if action == 'WantedNew':
             newaction = 'Wanted'
         else:
             newaction = action
 
-        issuelist = []
+        comicid = args.get('comicid')
+        comicname = args.get('comicname')
+        comicyear = args.get('comicyear')
 
-        comicid = None
-        for k,v in list(args.items()):
-            if k == 'issueids[]':
-                issuelist = v
-                if type(issuelist) != list:
-                    issuelist = [issuelist]
-            if k == 'comicid':
-                comicid = v
-            if k == 'comicname':
-                comicname = v
-            if k == 'comicyear':
-                comicyear = v
+        # Normalize issue IDs from all valid parameter keys (Modern and Legacy)
+        raw_issue_ids = []
+        for key in ('issueids', 'issueids[]', 'issueid', 'issueid[]', 'aissueid', 'aissueid[]', 'aissueids'):
+            if key in args:
+                val = args[key]
+                if isinstance(val, (list, tuple, set)):
+                    raw_issue_ids.extend(val)
+                elif isinstance(val, str):
+                    if ',' in val:
+                        raw_issue_ids.extend([x.strip() for x in val.split(',') if x.strip()])
+                    elif val.strip():
+                        raw_issue_ids.append(val.strip())
+                elif val is not None:
+                    raw_issue_ids.append(str(val))
 
-        if len(issuelist) > 0:
-            args = issuelist
+        # Filter out UI table tokens and non-ID values
+        ignored_tokens = {
+            'issue_table', 'history_table', 'manage_issues', 'issue_table_length',
+            'issues', 'annuals', 'annual_table_length', 'issueids', 'issueids[]',
+            'issueid', 'issueid[]', 'action', 'comicid', 'comicname', 'comicyear',
+            'aissueid', 'aissueid[]', 'aissueids'
+        }
 
-        for IssueID in args:
-            if any([IssueID is None, 'issue_table' in IssueID, 'history_table' in IssueID, 'manage_issues' in IssueID, 'issue_table_length' in IssueID, 'issues' in IssueID, 'annuals' in IssueID, 'annual_table_length' in IssueID]):
+        valid_issue_ids = []
+        for raw_id in raw_issue_ids:
+            if not raw_id:
                 continue
-            else:
-                mi = myDB.selectone("SELECT a.ComicYear, b.* FROM issues b LEFT JOIN comics a ON a.ComicID=b.ComicID WHERE b.IssueID=?", [IssueID]).fetchone()
-                arcs = False
-                annchk = 'no'
-                seriesyear = None
-                if mi is None:
-                    if mylar.CONFIG.ANNUALS_ON:
-                        mi = myDB.selectone("SELECT a.ComicYear, b.* FROM annuals b LEFT JOIN comics a ON a.ComicID=b.ComicID WHERE b.IssueID=? AND NOT b.Deleted", [IssueID]).fetchone()
+            str_id = str(raw_id).strip()
+            if not str_id or str_id in ignored_tokens:
+                continue
+            if any(t in str_id for t in ('issue_table', 'history_table', 'manage_issues', 'annual_table_length')):
+                continue
+            valid_issue_ids.append(str_id)
+
+        # Deduplicate while preserving order
+        seen = set()
+        issuelist = []
+        for iid in valid_issue_ids:
+            if iid not in seen:
+                seen.add(iid)
+                issuelist.append(iid)
+
+        if not issuelist:
+            return json.dumps({
+                'status': 'failure',
+                'message': 'No valid issue IDs provided'
+            })
+
+        failedcomicid = None
+        failedissueid = None
+        last_found_comicid = comicid
+        last_found_comicname = comicname
+        last_found_seriesyear = comicyear
+        updated_count = 0
+
+        for IssueID in issuelist:
+            mi = myDB.selectone("SELECT a.ComicYear, b.* FROM issues b LEFT JOIN comics a ON a.ComicID=b.ComicID WHERE b.IssueID=?", [IssueID]).fetchone()
+            arcs = False
+            annchk = 'no'
+            seriesyear = None
+            if mi is None:
+                if mylar.CONFIG.ANNUALS_ON:
+                    mi = myDB.selectone("SELECT a.ComicYear, b.* FROM annuals b LEFT JOIN comics a ON a.ComicID=b.ComicID WHERE b.IssueID=? AND NOT b.Deleted", [IssueID]).fetchone()
+                    if mi is not None:
+                        comicname = mi['ReleaseComicName']
+                        issuenumber = mi['Issue_Number']
+                        annchk = 'yes'
+                        comicid = mi['ComicID']
+                        seriesyear = mi['ComicYear']
+                    else:
+                        mi = myDB.selectone("SELECT * FROM storyarcs WHERE IssueArcID=?", [IssueID]).fetchone()
                         if mi is not None:
-                            comicname = mi['ReleaseComicName']
-                            issuenumber = mi['Issue_Number']
-                            annchk = 'yes'
+                            arcs = True
+                            comicname = mi['ComicName']
+                            issuenumber = mi['IssueNumber']
                             comicid = mi['ComicID']
-                            seriesyear = mi['ComicYear']
                         else:
-                            mi = myDB.selectone("SELECT * FROM storyarcs WHERE IssueArcID=?", [IssueID]).fetchone()
-                            if mi is not None:
-                                arcs = True
-                                comicname = mi['ComicName']
-                                issuenumber = mi['IssueNumber']
-                                comicid = mi['ComicID']
-                            else:
-                                logger.warn('unable to reference issueid: %s' % IssueID)
-                                continue
+                            logger.warn('unable to reference issueid: %s' % IssueID)
+                            continue
                 else:
-                    comicname = mi['ComicName']
-                    issuenumber = mi['Issue_Number']
-                    comicid = mi['ComicID']
-                    seriesyear = mi['ComicYear']
+                    mi = myDB.selectone("SELECT * FROM storyarcs WHERE IssueArcID=?", [IssueID]).fetchone()
+                    if mi is not None:
+                        arcs = True
+                        comicname = mi['ComicName']
+                        issuenumber = mi['IssueNumber']
+                        comicid = mi['ComicID']
+                    else:
+                        logger.warn('unable to reference issueid: %s' % IssueID)
+                        continue
+            else:
+                comicname = mi['ComicName']
+                issuenumber = mi['Issue_Number']
+                comicid = mi['ComicID']
+                seriesyear = mi['ComicYear']
 
-                if action == 'OppositeTier':
-                    try:
-                        if mi['DateAdded'] <= mylar.SEARCH_TIER_DATE:
-                            date_added = helpers.today() #tier = "2nd"
-                            tier1_cnt +=1
-                        else:
-                            dt = datetime.datetime.strptime(mylar.SEARCH_TIER_DATE, '%Y-%m-%d')
-                            dt-=datetime.timedelta(days=2)
-                            new_tier_date = datetime.datetime.strftime(dt, '%Y-%m-%d')
-                            date_added = new_tier_date #tier = "1st [%s]" % mi['DateAdded']
-                            tier2_cnt +=1
-                    except:
-                        date_added = mylar.SEARCH_TIER_DATE #"1st [%s]" % mi['DateAdded']
+            if comicid:
+                last_found_comicid = comicid
+            if comicname:
+                last_found_comicname = comicname
+            if seriesyear:
+                last_found_seriesyear = seriesyear
+
+            if action == 'OppositeTier':
+                try:
+                    if mi['DateAdded'] <= mylar.SEARCH_TIER_DATE:
+                        date_added = helpers.today() #tier = "2nd"
+                        tier1_cnt +=1
+                    else:
+                        dt = datetime.datetime.strptime(mylar.SEARCH_TIER_DATE, '%Y-%m-%d')
+                        dt-=datetime.timedelta(days=2)
+                        new_tier_date = datetime.datetime.strftime(dt, '%Y-%m-%d')
+                        date_added = new_tier_date #tier = "1st [%s]" % mi['DateAdded']
                         tier2_cnt +=1
+                except:
+                    date_added = mylar.SEARCH_TIER_DATE #"1st [%s]" % mi['DateAdded']
+                    tier2_cnt +=1
 
-                    newValueDict = {'DateAdded': date_added}
+                newValueDict = {'DateAdded': date_added}
 
-                elif action == 'Downloaded':
-                    if mi['Status'] == "Skipped" or mi['Status'] == "Wanted":
-                        logger.fdebug("Cannot change status to %s as comic is not Snatched or Downloaded" % (newaction))
-                        continue
-                elif action == 'Archived':
-                    logger.fdebug("Marking %s %s as %s" % (comicname, issuenumber, newaction))
-                    #updater.forceRescan(mi['ComicID'])
-                    issuestoArchive.append(IssueID)
-                elif action == 'Wanted' or action == 'Retry':
-                    if mi['Status'] == 'Wanted':
-                        logger.fdebug('Issue already set to Wanted status - no need to change it again.')
-                        continue
-                    if action == 'Retry': newaction = 'Wanted'
-                    logger.fdebug("Marking %s %s as %s" % (comicname, issuenumber, newaction))
-                    issuesToAdd.append(IssueID)
-                elif action == 'Skipped':
-                    logger.fdebug("Marking " + str(IssueID) + " as Skipped")
-                elif action == 'Clear':
-                    myDB.action("DELETE FROM snatched WHERE IssueID=?", [IssueID])
+            elif action == 'Downloaded':
+                if mi['Status'] == "Skipped" or mi['Status'] == "Wanted":
+                    logger.fdebug("Cannot change status to %s as comic is not Snatched or Downloaded" % (newaction))
                     continue
-                elif action == 'Failed' and mylar.CONFIG.FAILED_DOWNLOAD_HANDLING:
-                    logger.fdebug('Marking [' + comicname + '] : ' + str(IssueID) + ' as Failed. Sending to failed download handler.')
-                    failedcomicid = mi['ComicID']
-                    failedissueid = IssueID
-                    break
-                if arcs is False:
-                    controlValueDict = {"IssueID": IssueID}
-                else:
-                    controlValueDict = {"IssueArcID": IssueID}
+            elif action == 'Archived':
+                logger.fdebug("Marking %s %s as %s" % (comicname, issuenumber, newaction))
+                issuestoArchive.append(IssueID)
+            elif action == 'Wanted' or action == 'Retry':
+                if mi['Status'] == 'Wanted':
+                    logger.fdebug('Issue already set to Wanted status - no need to change it again.')
+                    continue
+                if action == 'Retry': newaction = 'Wanted'
+                logger.fdebug("Marking %s %s as %s" % (comicname, issuenumber, newaction))
+                issuesToAdd.append(IssueID)
+            elif action == 'Skipped':
+                logger.fdebug("Marking " + str(IssueID) + " as Skipped")
+            elif action == 'Clear':
+                myDB.action("DELETE FROM snatched WHERE IssueID=?", [IssueID])
+                updated_count += 1
+                continue
+            elif action == 'Failed' and mylar.CONFIG.FAILED_DOWNLOAD_HANDLING:
+                logger.fdebug('Marking [' + str(comicname) + '] : ' + str(IssueID) + ' as Failed. Sending to failed download handler.')
+                failedcomicid = mi['ComicID']
+                failedissueid = IssueID
+                break
 
-                if action != 'OppositeTier':
-                    newValueDict = {"Status": newaction}
+            if arcs is False:
+                controlValueDict = {"IssueID": IssueID}
+            else:
+                controlValueDict = {"IssueArcID": IssueID}
 
-                if annchk == 'yes':
-                    myDB.upsert("annuals", newValueDict, controlValueDict)
-                elif arcs is True:
-                    myDB.upsert("storyarcs", newValueDict, controlValueDict)
-                else:
-                    myDB.upsert("issues", newValueDict, controlValueDict)
+            if action != 'OppositeTier':
+                newValueDict = {"Status": newaction}
+
+            if annchk == 'yes':
+                myDB.upsert("annuals", newValueDict, controlValueDict)
+            elif arcs is True:
+                myDB.upsert("storyarcs", newValueDict, controlValueDict)
+            else:
+                myDB.upsert("issues", newValueDict, controlValueDict)
+            updated_count += 1
 
         if action == 'OppositeTier':
             tierline = 'Now changing '
@@ -2482,17 +2543,31 @@ class WebInterface(object):
                     tierline += ' and '
                 tierline += '%s Tier2 items to Tier 1' % tier1_cnt
             logger.info('[TIER-REARRANGER] %s' % tierline)
-        if action == 'Failed' and mylar.CONFIG.FAILED_DOWNLOAD_HANDLING:
+        if action == 'Failed' and mylar.CONFIG.FAILED_DOWNLOAD_HANDLING and failedcomicid and failedissueid:
             self.failed_handling(failedcomicid, failedissueid)
         elif len(issuestoArchive) > 0:
-            updater.forceRescan(mi['ComicID'])
+            if last_found_comicid:
+                updater.forceRescan(last_found_comicid)
         elif len(issuesToAdd) > 0:
             logger.fdebug("Marking issues: %s as Wanted" % (issuesToAdd))
             threading.Thread(target=search.searchIssueIDList, args=[issuesToAdd]).start()
         else:
-            updater.forceRescan(mi['ComicID'])
-        mylar.GLOBAL_MESSAGES = {'status': 'success', 'comicname': comicname, 'seriesyear': seriesyear, 'comicid': comicid, 'tables': 'both', 'message': 'Successfully changed status of %s issues to %s' % (len(issuelist), action)}
-        return json.dumps({'status': 'success'})
+            if last_found_comicid:
+                updater.forceRescan(last_found_comicid)
+
+        mylar.GLOBAL_MESSAGES = {
+            'status': 'success',
+            'comicname': last_found_comicname,
+            'seriesyear': last_found_seriesyear,
+            'comicid': last_found_comicid,
+            'tables': 'both',
+            'message': 'Successfully changed status of %s issues to %s' % (updated_count, action)
+        }
+        return json.dumps({
+            'status': 'success',
+            'message': 'Successfully changed status of %s issues to %s' % (updated_count, action),
+            'updated_count': updated_count
+        })
     markissues.exposed = True
 
     def markentries(self, action=None, **args):
@@ -8750,11 +8825,34 @@ class WebInterface(object):
         return handle_kavita_diagnostics(**kwargs)
     kavitaDiagnostics.exposed = True
 
+    def kavitaConfigUpdate(self, **kwargs):
+        from mylar.extensions.providers.kavita.runtime_controller import handle_kavita_config_update
+        return handle_kavita_config_update(**kwargs)
+    kavitaConfigUpdate.exposed = True
+
+    def kavitaSyncBackfillPreview(self, **kwargs):
+        from mylar.extensions.providers.kavita.runtime_controller import handle_kavita_sync_backfill_preview
+        return handle_kavita_sync_backfill_preview(**kwargs)
+    kavitaSyncBackfillPreview.exposed = True
+
+    def kavitaSyncBackfill(self, **kwargs):
+        from mylar.extensions.providers.kavita.runtime_controller import handle_kavita_sync_backfill
+        return handle_kavita_sync_backfill(**kwargs)
+    kavitaSyncBackfill.exposed = True
+
+    def kavitaSyncBackfillStatus(self, **kwargs):
+        from mylar.extensions.providers.kavita.runtime_controller import handle_kavita_sync_backfill_status
+        return handle_kavita_sync_backfill_status(**kwargs)
+    kavitaSyncBackfillStatus.exposed = True
+
     def kavita_diagnostics(self, **kwargs):
         from mylar.config import get_mylar_instance_slug
         from mylar.extensions.providers.kavita.publisher_service import (
             get_kavita_publisher_mappings,
             get_latest_automation_notice
+        )
+        from mylar.extensions.providers.kavita.runtime_controller import (
+            get_or_create_kavita_csrf_token
         )
         kavita_status = {
             'enabled': bool(getattr(mylar.CONFIG, 'KAVITA_ENABLED', False)),
@@ -8764,20 +8862,17 @@ class WebInterface(object):
         }
         publisher_mappings = get_kavita_publisher_mappings()
         automation_notice = get_latest_automation_notice()
+        csrf_token = get_or_create_kavita_csrf_token()
         return serve_template(
             templatename="kavita_diagnostics.html",
-            title="Kavita Integration",
+            title="Settings / Integrations / Kavita",
             kavita_status=kavita_status,
             publisher_mappings=publisher_mappings,
             automation_notice=automation_notice,
+            csrf_token=csrf_token,
             **kwargs
         )
     kavita_diagnostics.exposed = True
-
-    def kavitaConfigUpdate(self, **kwargs):
-        from mylar.extensions.providers.kavita.runtime_controller import handle_kavita_config_update
-        return handle_kavita_config_update(**kwargs)
-    kavitaConfigUpdate.exposed = True
 
     def metronCompareCredits(self, issueid=None, annual=0, **kwargs):
         from mylar.extensions.providers.metron.runtime_controller import handle_metron_compare_credits

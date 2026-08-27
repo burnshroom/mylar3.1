@@ -10,23 +10,35 @@
     <input type="hidden" id="page_name" value="creator_detail" />
 
     <style>
+        /* ─── BREADCRUMB / HIERARCHY NAVIGATION ─── */
         .creator-breadcrumb {
-            margin-bottom: 16px;
-        }
-
-        .creator-breadcrumb-link {
-            color: var(--color-text-secondary, #9ea3b5);
-            font-size: 13px;
-            font-weight: 500;
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 6px;
-            text-decoration: none;
-            transition: color 0.12s ease;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin-bottom: 16px;
+            font-weight: 500;
         }
 
-        .creator-breadcrumb-link:hover {
+        .creator-breadcrumb a {
+            color: var(--color-text-secondary, #9ea3b5);
+            text-decoration: none;
+            transition: color var(--transition-fast, 0.15s ease);
+        }
+
+        .creator-breadcrumb a:hover {
+            color: var(--color-accent, #e04652);
+        }
+
+        .creator-breadcrumb-sep {
+            color: var(--color-text-dim, #6c7184);
+            font-size: 12px;
+        }
+
+        .creator-breadcrumb-current {
             color: var(--color-text, #f0f1f5);
+            font-weight: 600;
         }
 
         /* ─── HERO CARD ─── */
@@ -403,9 +415,15 @@
     </style>
 
     %if not detail or not detail.get('found'):
-        <div class="creator-breadcrumb">
-            <a href="creators" class="creator-breadcrumb-link">&larr; Back to Creator Credits</a>
-        </div>
+        <nav class="creator-breadcrumb" aria-label="Breadcrumb">
+            <a href="config">Settings</a>
+            <span class="creator-breadcrumb-sep">/</span>
+            <span>Metadata &amp; Identity</span>
+            <span class="creator-breadcrumb-sep">/</span>
+            <a href="creators">Creators</a>
+            <span class="creator-breadcrumb-sep">/</span>
+            <span class="creator-breadcrumb-current">Not Found</span>
+        </nav>
         <div class="creator-hero-card" style="text-align: center; padding: 48px 24px;">
             <h2 style="color: var(--color-accent, #e04652); margin-bottom: 12px;">Creator Credit Record Not Found</h2>
             <p style="color: var(--color-text-secondary, #9ea3b5); max-width: 460px; margin: 0 auto 20px auto;">
@@ -414,9 +432,15 @@
             <a href="creators" class="btn-primary" style="display: inline-block; padding: 8px 18px; text-decoration: none;">Browse All Creator Credits</a>
         </div>
     %else:
-        <div class="creator-breadcrumb">
-            <a href="creators" class="creator-breadcrumb-link">&larr; Back to Creator Credits</a>
-        </div>
+        <nav class="creator-breadcrumb" aria-label="Breadcrumb">
+            <a href="config">Settings</a>
+            <span class="creator-breadcrumb-sep">/</span>
+            <span>Metadata &amp; Identity</span>
+            <span class="creator-breadcrumb-sep">/</span>
+            <a href="creators">Creators</a>
+            <span class="creator-breadcrumb-sep">/</span>
+            <span class="creator-breadcrumb-current">${html.escape(detail['raw_name'])}</span>
+        </nav>
 
         <!-- Creator Hero Identity Section -->
         <div class="creator-hero-card">

@@ -8,6 +8,7 @@
 
 <%def name="body()">
     <input type="hidden" id="page_name" value="kavita_diagnostics" />
+    <input type="hidden" id="kavita_csrf_token" value="${csrf_token or ''}" />
 
     <style>
         /* ─── MODERN KAVITA INTEGRATION DESIGN SYSTEM ─── */
@@ -15,6 +16,85 @@
             max-width: 1100px;
             margin: 0 auto;
             padding: 24px 20px 60px 20px;
+        }
+
+        /* ─── BREADCRUMB / HIERARCHY NAVIGATION ─── */
+        .kavita-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin-bottom: 14px;
+            font-weight: 500;
+        }
+
+        .kavita-breadcrumb a {
+            color: var(--color-text-secondary, #9ea3b5);
+            text-decoration: none;
+            transition: color var(--transition-fast, 0.15s ease);
+        }
+
+        .kavita-breadcrumb a:hover {
+            color: var(--color-accent, #e04652);
+        }
+
+        .kavita-breadcrumb-sep {
+            color: var(--color-text-dim, #6c7184);
+            font-size: 12px;
+        }
+
+        .kavita-breadcrumb-current {
+            color: var(--color-text, #f0f1f5);
+            font-weight: 600;
+        }
+
+        /* ─── MODAL DIALOG ─── */
+        .kavita-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 11, 14, 0.75);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+        }
+
+        .kavita-modal-content {
+            background: var(--color-surface, #17181e);
+            border: 1px solid var(--color-border, #292c37);
+            border-radius: var(--radius-lg, 12px);
+            width: 100%;
+            max-width: 620px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        .kavita-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--color-border, #292c37);
+        }
+
+        .kavita-modal-close {
+            background: transparent;
+            border: none;
+            color: var(--color-text-secondary, #9ea3b5);
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px;
+        }
+
+        .kavita-modal-close:hover {
+            color: var(--color-text, #f0f1f5);
         }
 
         .kavita-header {
@@ -456,6 +536,15 @@
     </style>
 
     <div class="kavita-page-container">
+        <!-- Breadcrumb Navigation -->
+        <nav class="kavita-breadcrumb" aria-label="Breadcrumb">
+            <a href="config">Settings</a>
+            <span class="kavita-breadcrumb-sep">/</span>
+            <span>Integrations</span>
+            <span class="kavita-breadcrumb-sep">/</span>
+            <span class="kavita-breadcrumb-current">Kavita</span>
+        </nav>
+
         <!-- Header -->
         <div class="kavita-header">
             <div class="kavita-title-group">
@@ -545,7 +634,7 @@
             <strong>Read-Only Safety Guarantee:</strong> Diagnostics and connection checks perform zero library mutations, creations, updates, renames, deletions, folder scans, root bindings, database writes, or filesystem writes. Remote discovery results are observations only.
         </div>
 
-        <!-- Section 2: Publisher Root Mappings Card (Phase K5) -->
+        <!-- Section 2: Publisher Root Mappings Card (Phase K5 & K8) -->
         <div class="kavita-card" id="kavita_mappings_card">
             <div class="kavita-card-header">
                 <div>
@@ -556,6 +645,81 @@
                         Publisher Root Mappings (<span id="kavita_mappings_count">${len(publisher_mappings) if publisher_mappings else 0}</span>)
                     </h2>
                     <p class="kavita-card-desc">Active Mylar-to-Kavita publisher library mappings and scan status. Updated automatically upon comic post-processing.</p>
+                </div>
+                %if kavita_status.get('enabled') and kavita_status.get('url') and kavita_status.get('has_api_key'):
+                    <div>
+                        <button type="button" id="kavita_sync_backfill_btn" class="btn-modern-secondary" style="font-size: 12.5px; padding: 7px 14px;">
+                            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 4v4h4M15 12v-4h-4"/>
+                                <path d="M13.5 6A6 6 0 0 0 3.5 3.5L1 8m14 0l-2.5 4.5A6 6 0 0 1 2.5 10"/>
+                            </svg>
+                            Sync Existing Mylar Series
+                        </button>
+                    </div>
+                %endif
+            </div>
+
+            <!-- Phase K8 Progress Card -->
+            <div id="kavita_backfill_progress_card" style="display: none; background: var(--color-surface-elevated, #1e2027); border: 1px solid var(--color-border, #292c37); border-left: 4px solid #38bdf8; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div style="font-weight: 700; font-size: 14px; color: var(--color-text, #f0f1f5);">
+                        <span id="backfill_status_icon">⏳</span> Kavita Series Synchronization
+                        <span id="backfill_status_pill" class="status-pill status-pill-clean" style="margin-left: 8px;">RUNNING</span>
+                    </div>
+                    <div id="backfill_time_elapsed" style="font-size: 12px; color: var(--color-text-secondary, #9ea3b5);"></div>
+                </div>
+                <div id="backfill_current_info" style="font-size: 13px; color: var(--color-text-secondary, #9ea3b5); margin-bottom: 12px;">
+                    Analyzing unmapped publisher roots...
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 8px;">
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Total Candidates</div>
+                        <div id="metric_candidate_series" style="font-size: 16px; font-weight: 700; color: #f0f1f5;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Unique Roots</div>
+                        <div id="metric_unique_roots" style="font-size: 16px; font-weight: 700; color: #f0f1f5;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Active (Skipped)</div>
+                        <div id="metric_already_active" style="font-size: 16px; font-weight: 700; color: #2ec467;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Unmapped Roots</div>
+                        <div id="metric_unmapped_roots" style="font-size: 16px; font-weight: 700; color: #38bdf8;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Created</div>
+                        <div id="metric_created" style="font-size: 16px; font-weight: 700; color: #2ec467;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Associated</div>
+                        <div id="metric_associated" style="font-size: 16px; font-weight: 700; color: #38bdf8;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Scans Queued</div>
+                        <div id="metric_scans_queued" style="font-size: 16px; font-weight: 700; color: #c084fc;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Flat (Skipped)</div>
+                        <div id="metric_flat_skipped" style="font-size: 16px; font-weight: 700; color: #9ea3b5;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Missing (Skipped)</div>
+                        <div id="metric_missing_skipped" style="font-size: 16px; font-weight: 700; color: #9ea3b5;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Backoff (Skipped)</div>
+                        <div id="metric_backoff_skipped" style="font-size: 16px; font-weight: 700; color: #f59e0b;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Ambiguous (Skipped)</div>
+                        <div id="metric_ambiguous_skipped" style="font-size: 16px; font-weight: 700; color: #e04652;">0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border-subtle, #1f212a);">
+                        <div style="font-size: 11px; color: var(--color-text-secondary, #9ea3b5);">Failures</div>
+                        <div id="metric_failures" style="font-size: 16px; font-weight: 700; color: #e04652;">0</div>
+                    </div>
                 </div>
             </div>
 
@@ -677,6 +841,47 @@
                         Future Naming Proposals (Unbound)
                     </h3>
                     <div id="kavita_proposals_list" class="kavita-proposal-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase K8 Backfill Confirmation Modal -->
+        <div id="kavita_backfill_modal" class="kavita-modal-overlay" style="display: none;">
+            <div class="kavita-modal-content">
+                <div class="kavita-modal-header">
+                    <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--color-text, #f0f1f5);">Sync Existing Series into Kavita</h3>
+                    <button type="button" id="close_backfill_modal_btn" class="kavita-modal-close">&times;</button>
+                </div>
+                <div class="kavita-modal-body" style="padding: 18px 20px; font-size: 13.5px; line-height: 1.5; color: var(--color-text-secondary, #9ea3b5);">
+                    <p style="margin-top: 0;">This operation analyzes your existing Mylar series library and creates or associates corresponding Publisher Libraries in your Kavita server for unmapped publisher folders.</p>
+
+                    <div style="background: var(--color-surface-elevated, #1e2027); border: 1px solid var(--color-border, #292c37); border-radius: 8px; padding: 14px 16px; margin: 16px 0;">
+                        <div style="font-weight: 700; color: var(--color-text, #f0f1f5); margin-bottom: 8px;">Summary of Library Analysis:</div>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6;">
+                            <li>Total Series Analyzed: <strong id="preview_total_series" style="color: #f0f1f5;">-</strong></li>
+                            <li>Unique Publisher Roots: <strong id="preview_unique_roots" style="color: #f0f1f5;">-</strong></li>
+                            <li>Already Active Mappings: <strong id="preview_already_active" style="color: #2ec467;">-</strong> <em>(Skipped; no remote action)</em></li>
+                            <li>Ineligible Backoff Mappings: <strong id="preview_backoff_skipped" style="color: #f59e0b;">-</strong> <em>(Skipped; in retry backoff window)</em></li>
+                            <li>Ambiguous Mappings: <strong id="preview_ambiguous_skipped" style="color: #e04652;">-</strong> <em>(Skipped; requires manual Kavita cleanup)</em></li>
+                            <li>Unmapped Roots to Sync: <strong id="preview_unmapped_roots" style="color: #38bdf8;">-</strong> <em>(Will be created or associated)</em></li>
+                            <li>Skipped (Flat Layouts): <strong id="preview_flat_skipped" style="color: #9ea3b5;">-</strong> <em>(No publisher subfolder)</em></li>
+                            <li>Skipped (Missing Folders): <strong id="preview_missing_skipped" style="color: #9ea3b5;">-</strong> <em>(Path not found on disk)</em></li>
+                        </ul>
+                    </div>
+
+                    <div style="font-size: 12px; color: var(--color-text-muted, #6c7184); background: rgba(245, 158, 11, 0.08); border-left: 3px solid #f59e0b; padding: 10px 12px; border-radius: 4px; margin-bottom: 16px;">
+                        <strong>Important Notices &amp; Requirements:</strong><br/>
+                        1. <strong>Exact Literal Paths:</strong> Mylar will send each series' literal publisher directory path (e.g. <code>/comics/Image Comics</code>) directly to Kavita.<br/>
+                        2. <strong>Storage &amp; Access:</strong> Kavita must have access to identical folder paths within its own environment. Container mount mappings and permissions remain the user's responsibility.<br/>
+                        3. <strong>Remote Operations:</strong> This action may create new libraries and queue initial library-specific scans on your Kavita server for unmapped roots.<br/>
+                        4. <strong>Active Mapping Protection:</strong> Existing active publisher libraries will not be modified or rescanned by this backfill.
+                    </div>
+
+                    <p style="margin-bottom: 0; font-weight: 600; color: var(--color-text, #f0f1f5);">Are you sure you want to start the synchronization process?</p>
+                </div>
+                <div class="kavita-modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--color-border, #292c37);">
+                    <button type="button" id="cancel_backfill_btn" class="btn-modern-secondary">Cancel</button>
+                    <button type="button" id="confirm_backfill_btn" class="btn-modern-primary">Confirm &amp; Start Sync</button>
                 </div>
             </div>
         </div>
@@ -892,6 +1097,189 @@
                     }
                 });
             });
+
+            // ─── PHASE K8: SYNC EXISTING MYLAR SERIES ───
+            var backfillPollTimer = null;
+
+            $('#kavita_sync_backfill_btn').click(function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var csrfToken = $('#kavita_csrf_token').val();
+
+                $btn.prop('disabled', true);
+
+                $.ajax({
+                    type: 'POST',
+                    url: 'kavitaSyncBackfillPreview',
+                    data: { csrf_token: csrfToken },
+                    dataType: 'json',
+                    success: function(data) {
+                        $btn.prop('disabled', false);
+                        if (data && data.status === 'success') {
+                            $('#preview_total_series').text(data.total_candidate_series || 0);
+                            $('#preview_unique_roots').text(data.unique_publisher_roots || 0);
+                            $('#preview_already_active').text(data.already_active_count || 0);
+                            $('#preview_backoff_skipped').text(data.backoff_skipped_count || 0);
+                            $('#preview_ambiguous_skipped').text(data.ambiguous_skipped_count || 0);
+                            $('#preview_unmapped_roots').text(data.unmapped_roots_count || 0);
+                            $('#preview_flat_skipped').text(data.flat_layout_count || 0);
+                            $('#preview_missing_skipped').text(data.missing_directory_count || 0);
+
+                            $('#kavita_backfill_modal').fadeIn(150);
+                        } else {
+                            var msg = (data && data.message) ? data.message : 'Failed to analyze existing series library.';
+                            alert('Preview Error: ' + msg);
+                        }
+                    },
+                    error: function(xhr) {
+                        $btn.prop('disabled', false);
+                        var errMsg = 'Failed to analyze existing series library.';
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            if (errData && errData.message) errMsg = errData.message;
+                        } catch(e) {}
+                        alert('Preview Error: ' + errMsg);
+                    }
+                });
+            });
+
+            $('#close_backfill_modal_btn, #cancel_backfill_btn').click(function() {
+                $('#kavita_backfill_modal').fadeOut(150);
+            });
+
+            $('#confirm_backfill_btn').click(function() {
+                $('#kavita_backfill_modal').fadeOut(150);
+                var csrfToken = $('#kavita_csrf_token').val();
+                var $btn = $('#kavita_sync_backfill_btn');
+                $btn.prop('disabled', true);
+
+                $('#kavita_backfill_progress_card').slideDown(200);
+                $('#backfill_status_pill').removeClass('status-pill-clean status-pill-warn status-pill-error').addClass('status-pill-clean').text('STARTING');
+                $('#backfill_current_info').text('Starting background synchronization job...');
+
+                $.ajax({
+                    type: 'POST',
+                    url: 'kavitaSyncBackfill',
+                    data: { csrf_token: csrfToken },
+                    dataType: 'json',
+                    success: function(data) {
+                        if (data && (data.status === 'started' || data.status === 'busy')) {
+                            var jobId = data.job_id;
+                            startBackfillPolling(jobId);
+                        } else {
+                            $btn.prop('disabled', false);
+                            var msg = (data && data.message) ? data.message : 'Failed to start synchronization.';
+                            $('#backfill_status_pill').removeClass('status-pill-clean').addClass('status-pill-error').text('FAILED');
+                            $('#backfill_current_info').html('<span style="color:#e04652;">' + htmlEscape(msg) + '</span>');
+                        }
+                    },
+                    error: function(xhr) {
+                        $btn.prop('disabled', false);
+                        var errMsg = 'Failed to start synchronization.';
+                        try {
+                            var errData = JSON.parse(xhr.responseText);
+                            if (errData && errData.message) errMsg = errData.message;
+                        } catch(e) {}
+                        $('#backfill_status_pill').removeClass('status-pill-clean').addClass('status-pill-error').text('FAILED');
+                        $('#backfill_current_info').html('<span style="color:#e04652;">' + htmlEscape(errMsg) + '</span>');
+                    }
+                });
+            });
+
+            function startBackfillPolling(jobId) {
+                if (backfillPollTimer) clearInterval(backfillPollTimer);
+                var csrfToken = $('#kavita_csrf_token').val();
+
+                backfillPollTimer = setInterval(function() {
+                    $.ajax({
+                        type: 'POST',
+                        url: 'kavitaSyncBackfillStatus',
+                        data: { csrf_token: csrfToken, job_id: jobId },
+                        dataType: 'json',
+                        success: function(data) {
+                            if (!data) return;
+
+                            var status = data.status || 'idle';
+                            var m = data.metrics || {};
+
+                            $('#metric_candidate_series').text(data.total_candidate_series || 0);
+                            $('#metric_unique_roots').text(data.unique_publisher_roots || 0);
+                            $('#metric_already_active').text(m.already_active_skipped || 0);
+                            $('#metric_unmapped_roots').text(m.unmapped_roots || 0);
+                            $('#metric_created').text(m.created_mappings || 0);
+                            $('#metric_associated').text(m.associated_mappings || 0);
+                            $('#metric_scans_queued').text(m.scans_queued || 0);
+                            $('#metric_flat_skipped').text(m.flat_layout_skipped || 0);
+                            $('#metric_missing_skipped').text(m.missing_directory_skipped || 0);
+                            $('#metric_backoff_skipped').text(m.backoff_skipped || 0);
+                            $('#metric_ambiguous_skipped').text(m.ambiguous_skipped || 0);
+                            $('#metric_failures').text(m.sanitized_failures || 0);
+
+                            if (status === 'running') {
+                                $('#backfill_status_pill').removeClass('status-pill-error status-pill-clean').addClass('status-pill-warn').text('RUNNING');
+                                var currPub = data.current_publisher;
+                                if (currPub) {
+                                    $('#backfill_current_info').text('Processing publisher root: ' + currPub + ' (' + (data.processed_roots_count || 0) + '/' + (m.unmapped_roots || 0) + ')');
+                                } else {
+                                    $('#backfill_current_info').text('Analyzing unmapped publisher roots...');
+                                }
+                            } else if (status === 'completed') {
+                                clearInterval(backfillPollTimer);
+                                $('#kavita_sync_backfill_btn').prop('disabled', false);
+                                $('#backfill_status_pill').removeClass('status-pill-warn status-pill-error').addClass('status-pill-clean').text('COMPLETED');
+                                $('#backfill_current_info').html('<span style="color:#2ec467;">✓ Synchronization completed successfully. Processed ' + (data.processed_roots_count || 0) + ' unmapped roots.</span>');
+                                refreshMappingsTable();
+                            } else if (status === 'failed') {
+                                clearInterval(backfillPollTimer);
+                                $('#kavita_sync_backfill_btn').prop('disabled', false);
+                                $('#backfill_status_pill').removeClass('status-pill-clean status-pill-warn').addClass('status-pill-error').text('FAILED');
+                                $('#backfill_current_info').html('<span style="color:#e04652;">✗ Synchronization failed.</span>');
+                            }
+                        },
+                        error: function() {
+                            // Continue polling on transient network hiccup
+                        }
+                    });
+                }, 1500);
+            }
+
+            function refreshMappingsTable() {
+                $.ajax({
+                    type: 'POST',
+                    url: 'kavitaDiagnostics',
+                    dataType: 'json',
+                    success: function(data) {
+                        if (data && data.publisher_mappings) {
+                            var maps = data.publisher_mappings;
+                            $('#kavita_mappings_count').text(maps.length);
+                            if (maps.length > 0) {
+                                var html = '';
+                                for (var i = 0; i < maps.length; i++) {
+                                    var m = maps[i];
+                                    var state = m.mapping_state || m.MappingState || 'unknown';
+                                    var pillClass = 'status-pill-warn';
+                                    if (state === 'active') pillClass = 'status-pill-clean';
+                                    else if (state === 'path_rejected' || state === 'ambiguous_multi_path') pillClass = 'status-pill-error';
+
+                                    html += '<div class="kavita-lib-card">' +
+                                        '<div class="kavita-lib-header">' +
+                                            '<div class="kavita-lib-name">' + htmlEscape(m.publisher_display_name || m.PublisherDisplayName || 'Unknown') + '</div>' +
+                                            '<div><span class="status-pill ' + pillClass + '">' + htmlEscape(state.toUpperCase()) + '</span></div>' +
+                                        '</div>' +
+                                        '<div class="kavita-path-box">Local Literal Path: ' + htmlEscape(m.canonical_publisher_path || m.CanonicalPublisherPath || '') + '</div>' +
+                                        '<div style="font-size: 12.5px; color: var(--color-text-secondary, #9ea3b5); margin-bottom: 6px;">' +
+                                            (m.kavita_library_id ? ('Remote Kavita Library: <strong>' + htmlEscape(m.observed_library_name || m.publisher_display_name || '') + '</strong> (ID: ' + m.kavita_library_id + ') &bull; Provenance: ' + htmlEscape(m.provenance || 'mylar_created')) : 'Remote Kavita Library: <em>Unmapped</em>') +
+                                            (m.last_scan_queued_at ? (' &bull; Last Scan Queued: ' + htmlEscape(m.last_scan_queued_at)) : '') +
+                                        '</div>' +
+                                        (m.last_error_message ? ('<div class="kavita-warning-callout" style="margin-top: 8px;">⚠️ ' + htmlEscape(m.last_error_message) + '</div>') : '') +
+                                    '</div>';
+                                }
+                                $('#kavita_mappings_list').html(html);
+                            }
+                        }
+                    }
+                });
+            }
 
             function htmlEscape(str) {
                 if (!str) return '';

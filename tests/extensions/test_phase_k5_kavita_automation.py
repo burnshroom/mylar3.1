@@ -261,6 +261,7 @@ class TestPhaseK5KavitaAutomation(unittest.TestCase):
 
         self.assertEqual(res['status'], 'created')
         self.assertEqual(res['library_id'], 42)
+        self.assertIs(res.get('scan_queued'), True)
 
         create_calls = [c for c in recorded_calls if 'api/Library/create' in c['url']]
         self.assertEqual(len(create_calls), 1)
@@ -322,6 +323,7 @@ class TestPhaseK5KavitaAutomation(unittest.TestCase):
 
         self.assertEqual(res['status'], 'associated_existing')
         self.assertEqual(res['library_id'], 101)
+        self.assertIs(res.get('scan_queued'), True)
 
         create_calls = [c for c in recorded_calls if 'api/Library/create' in c['url']]
         self.assertEqual(len(create_calls), 0)
@@ -1234,6 +1236,121 @@ class TestPhaseK5KavitaAutomation(unittest.TestCase):
         """29. Prove git diff --check reports zero whitespace or formatting errors."""
         res = subprocess.run(['git', 'diff', '--check'], cwd=REPO_ROOT, capture_output=True, text=True)
         self.assertEqual(res.returncode, 0, f"git diff --check failed:\n{res.stdout}\n{res.stderr}")
+
+    # -------------------------------------------------------------------------
+    # 30. KavitaPublisherService Injected DB Object Retention
+    # -------------------------------------------------------------------------
+    def test_30_kavita_publisher_service_retains_injected_db(self):
+        """30. Prove KavitaPublisherService retains instance-owned DB object and does not instantiate replacement DBConnection objects."""
+        mock_db = MagicMock()
+        mock_db.select.return_value = []
+        mock_db.action.return_value = None
+
+        service = KavitaPublisherService(db_connection=mock_db)
+        self.assertIs(service._db, mock_db)
+        self.assertFalse(hasattr(KavitaPublisherService, '_custom_db'))
+        self.assertFalse(isinstance(getattr(KavitaPublisherService, '_db', None), property))
+
+        with patch('mylar.db.DBConnection') as mock_db_cls:
+            service.acquire_or_evaluate_mapping_lease(
+                instance_id='test-inst',
+                pub_key='testpub',
+                pub_display='Test Pub',
+                canonical_path='/comics/Test Pub',
+                server_url='http://127.0.0.1:5000/',
+                now=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+            )
+            mock_db_cls.assert_not_called()
+
+    # -------------------------------------------------------------------------
+    # 31. Create Succeeds but Initial Scan Fails Returns scan_queued=False
+    # -------------------------------------------------------------------------
+    def test_31_create_succeeds_initial_scan_rejection_returns_scan_queued_false(self):
+        """31. Prove that when library creation succeeds but initial scan is rejected, mapping remains active and scan_queued is False."""
+        service = KavitaPublisherService()
+        recorded_calls = []
+
+        def fake_handler(method, url, **kwargs):
+            recorded_calls.append({'method': method, 'url': url, 'kwargs': kwargs})
+            if 'api/Library/libraries' in url:
+                return FakeResponse(200, json_data=[])
+            if 'api/Settings/library-types' in url:
+                return FakeResponse(200, json_data=[{'id': 0, 'name': 'Comic'}])
+            if 'api/Library/create' in url:
+                body = kwargs.get('json', {})
+                return FakeResponse(200, json_data={'id': 88, 'name': body.get('name'), 'folders': body.get('folders')})
+            if 'api/Library/scan' in url:
+                return FakeResponse(500, text="Scan server error")
+            return FakeResponse(200, json_data={})
+
+        mock_session = MagicMock()
+        mock_session.request.side_effect = fake_handler
+        service._client_factory = lambda url, creds: KavitaClient(base_url=url, credentials=creds, session=mock_session)
+
+        pub_folder = os.path.join(mylar.CONFIG.COMIC_DIR, "ScanFail Pub")
+        series_folder = os.path.join(pub_folder, "Series 1")
+        with patch('os.path.isdir', return_value=True):
+            res = service.process_post_import_automation({
+                'SeriesLocation': series_folder,
+                'ComicPublisher': 'ScanFail Pub',
+                'ComicName': 'Series 1'
+            })
+
+        self.assertEqual(res['status'], 'created')
+        self.assertEqual(res['library_id'], 88)
+        self.assertIs(res.get('scan_queued'), False)
+
+        mappings = get_kavita_publisher_mappings()
+        self.assertEqual(len(mappings), 1)
+        m = mappings[0]
+        self.assertEqual(m['mapping_state'], 'active')
+        self.assertEqual(m['provenance'], 'mylar_created')
+        self.assertEqual(m['kavita_library_id'], 88)
+        self.assertIsNotNone(m['last_error_code'])
+
+    # -------------------------------------------------------------------------
+    # 32. Association Succeeds but Initial Scan Fails Returns scan_queued=False
+    # -------------------------------------------------------------------------
+    def test_32_association_succeeds_initial_scan_rejection_returns_scan_queued_false(self):
+        """32. Prove that when library association succeeds but initial scan is rejected, mapping remains active and scan_queued is False."""
+        service = KavitaPublisherService()
+        pub_folder = os.path.join(mylar.CONFIG.COMIC_DIR, "AssocFail Pub")
+        norm_path = normalize_path_str(pub_folder)
+
+        recorded_calls = []
+        def fake_handler(method, url, **kwargs):
+            recorded_calls.append({'method': method, 'url': url, 'kwargs': kwargs})
+            if 'api/Library/libraries' in url:
+                return FakeResponse(200, json_data=[
+                    {'id': 199, 'name': 'AssocFail Existing', 'folders': [norm_path]}
+                ])
+            if 'api/Library/scan' in url:
+                return FakeResponse(500, text="Scan server error")
+            return FakeResponse(200, json_data={})
+
+        mock_session = MagicMock()
+        mock_session.request.side_effect = fake_handler
+        service._client_factory = lambda url, creds: KavitaClient(base_url=url, credentials=creds, session=mock_session)
+
+        series_folder = os.path.join(pub_folder, "Series 1")
+        with patch('os.path.isdir', return_value=True):
+            res = service.process_post_import_automation({
+                'SeriesLocation': series_folder,
+                'ComicPublisher': 'AssocFail Pub',
+                'ComicName': 'Series 1'
+            })
+
+        self.assertEqual(res['status'], 'associated_existing')
+        self.assertEqual(res['library_id'], 199)
+        self.assertIs(res.get('scan_queued'), False)
+
+        mappings = get_kavita_publisher_mappings()
+        self.assertEqual(len(mappings), 1)
+        m = mappings[0]
+        self.assertEqual(m['mapping_state'], 'active')
+        self.assertEqual(m['provenance'], 'existing_exact_path')
+        self.assertEqual(m['kavita_library_id'], 199)
+        self.assertIsNotNone(m['last_error_code'])
 
 
 if __name__ == '__main__':

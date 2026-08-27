@@ -36,7 +36,12 @@ from mylar.extensions.providers.kavita.discovery import (
 from mylar.extensions.providers.kavita.runtime_controller import (
     handle_test_kavita,
     handle_kavita_diagnostics,
-    handle_kavita_config_update
+    handle_kavita_config_update,
+    get_or_create_kavita_csrf_token,
+    verify_kavita_csrf_token,
+    handle_kavita_sync_backfill_preview,
+    handle_kavita_sync_backfill,
+    handle_kavita_sync_backfill_status
 )
 from mylar.extensions.providers.kavita.publisher_service import (
     KavitaPublisherService,
@@ -45,6 +50,9 @@ from mylar.extensions.providers.kavita.publisher_service import (
     get_latest_automation_notice,
     derive_materialized_publisher_root,
     normalize_path_str
+)
+from mylar.extensions.providers.kavita.backfill_worker import (
+    KavitaSyncBackfillWorker
 )
 
 __all__ = [
@@ -69,10 +77,16 @@ __all__ = [
     'handle_test_kavita',
     'handle_kavita_diagnostics',
     'handle_kavita_config_update',
+    'get_or_create_kavita_csrf_token',
+    'verify_kavita_csrf_token',
+    'handle_kavita_sync_backfill_preview',
+    'handle_kavita_sync_backfill',
+    'handle_kavita_sync_backfill_status',
     'KavitaPublisherService',
     'handle_post_processing_kavita_automation',
     'get_kavita_publisher_mappings',
     'get_latest_automation_notice',
     'derive_materialized_publisher_root',
     'normalize_path_str',
+    'KavitaSyncBackfillWorker',
 ]

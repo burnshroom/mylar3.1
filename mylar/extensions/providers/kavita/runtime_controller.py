@@ -12,6 +12,8 @@ Zero full UUIDs, zero secrets, and zero mutation endpoints.
 
 import json
 import cherrypy
+import secrets
+import hmac
 
 from mylar import logger
 from mylar.extensions.providers.kavita.config import (
@@ -247,3 +249,178 @@ def handle_kavita_config_update(
         'mylar_instance_slug': get_mylar_instance_slug()
     })
 
+
+# -----------------------------------------------------------------------------
+# CSRF Helpers & Backfill Handlers (Phase K8)
+# -----------------------------------------------------------------------------
+
+_GLOBAL_KAVITA_CSRF_FALLBACK = secrets.token_hex(32)
+
+
+def get_or_create_kavita_csrf_token():
+    """Retrieve or initialize the active CSRF token for Kavita web endpoints."""
+    if hasattr(cherrypy, 'session') and isinstance(cherrypy.session, dict):
+        token = cherrypy.session.get('_kavita_csrf_token')
+        if not token:
+            token = secrets.token_hex(32)
+            cherrypy.session['_kavita_csrf_token'] = token
+        return token
+    return _GLOBAL_KAVITA_CSRF_FALLBACK
+
+
+def verify_kavita_csrf_token(token):
+    """Verify the supplied CSRF token against current session or fallback token."""
+    if not token or not isinstance(token, str) or not token.strip():
+        return False
+
+    clean_token = token.strip()
+    expected = None
+    if hasattr(cherrypy, 'session') and isinstance(cherrypy.session, dict):
+        expected = cherrypy.session.get('_kavita_csrf_token')
+    if not expected:
+        expected = _GLOBAL_KAVITA_CSRF_FALLBACK
+
+    return hmac.compare_digest(clean_token, expected)
+
+
+def _validate_request_method():
+    """Ensure HTTP method is POST."""
+    if hasattr(cherrypy, 'request'):
+        method = getattr(cherrypy.request, 'method', 'GET')
+        if method != 'POST':
+            return False
+    return True
+
+
+def _validate_csrf(csrf_token):
+    """Check CSRF token from argument or HTTP header."""
+    header_token = None
+    if hasattr(cherrypy, 'request') and hasattr(cherrypy.request, 'headers'):
+        header_token = (
+            cherrypy.request.headers.get('X-CSRF-Token') or
+            cherrypy.request.headers.get('X-CSRFToken')
+        )
+    candidate_token = csrf_token or header_token
+    return verify_kavita_csrf_token(candidate_token)
+
+
+def handle_kavita_sync_backfill_preview(worker=None, csrf_token=None, **kwargs):
+    """
+    HTTP handler for POST /kavitaSyncBackfillPreview.
+    Performs read-only candidate analysis with zero remote Kavita API calls.
+    Enforces POST method and CSRF validation.
+    """
+    if hasattr(cherrypy, 'response'):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+
+    if not _validate_request_method():
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 405
+        return json.dumps({
+            'status': 'error',
+            'status_code': 405,
+            'message': 'Method Not Allowed. POST is required.',
+            'error_code': 'method_not_allowed'
+        })
+
+    token = csrf_token or kwargs.get('csrf_token')
+    if not _validate_csrf(token):
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 403
+        return json.dumps({
+            'status': 'error',
+            'status_code': 403,
+            'message': 'Invalid or missing CSRF token.',
+            'error_code': 'invalid_csrf_token'
+        })
+
+    from mylar.extensions.providers.kavita.backfill_worker import KavitaSyncBackfillWorker
+    active_worker = worker or KavitaSyncBackfillWorker()
+    preview_res = active_worker.compute_preview()
+    return json.dumps(preview_res)
+
+
+def handle_kavita_sync_backfill(worker=None, service=None, csrf_token=None, **kwargs):
+    """
+    HTTP handler for POST /kavitaSyncBackfill.
+    Starts background synchronization job for existing unmapped series.
+    Returns promptly with job ID while worker runs asynchronously.
+    Enforces POST method and CSRF validation.
+    """
+    if hasattr(cherrypy, 'response'):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+
+    if not _validate_request_method():
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 405
+        return json.dumps({
+            'status': 'error',
+            'status_code': 405,
+            'message': 'Method Not Allowed. POST is required.',
+            'error_code': 'method_not_allowed'
+        })
+
+    token = csrf_token or kwargs.get('csrf_token')
+    if not _validate_csrf(token):
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 403
+        return json.dumps({
+            'status': 'error',
+            'status_code': 403,
+            'message': 'Invalid or missing CSRF token.',
+            'error_code': 'invalid_csrf_token'
+        })
+
+    from mylar.extensions.providers.kavita.backfill_worker import KavitaSyncBackfillWorker
+    active_worker = worker or KavitaSyncBackfillWorker()
+    start_res = active_worker.start_backfill(service=service)
+
+    if start_res.get('status') == 'busy':
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 409
+    elif start_res.get('status') == 'error':
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 400
+
+    return json.dumps(start_res)
+
+
+def handle_kavita_sync_backfill_status(worker=None, csrf_token=None, job_id=None, **kwargs):
+    """
+    HTTP handler for POST /kavitaSyncBackfillStatus.
+    Returns sanitized in-memory snapshot of worker progress and metric counters.
+    Rejects mismatched job_id with 404 job_not_found.
+    Enforces POST method and CSRF validation.
+    """
+    if hasattr(cherrypy, 'response'):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+
+    if not _validate_request_method():
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 405
+        return json.dumps({
+            'status': 'error',
+            'status_code': 405,
+            'message': 'Method Not Allowed. POST is required.',
+            'error_code': 'method_not_allowed'
+        })
+
+    token = csrf_token or kwargs.get('csrf_token')
+    if not _validate_csrf(token):
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 403
+        return json.dumps({
+            'status': 'error',
+            'status_code': 403,
+            'message': 'Invalid or missing CSRF token.',
+            'error_code': 'invalid_csrf_token'
+        })
+
+    from mylar.extensions.providers.kavita.backfill_worker import KavitaSyncBackfillWorker
+    active_worker = worker or KavitaSyncBackfillWorker()
+    jid = job_id or kwargs.get('job_id')
+    status_res = active_worker.get_status(job_id=jid)
+    if status_res.get('status_code') == 404:
+        if hasattr(cherrypy, 'response'):
+            cherrypy.response.status = 404
+    return json.dumps(status_res)

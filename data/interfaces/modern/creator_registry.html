@@ -10,6 +10,37 @@
     <input type="hidden" id="page_name" value="creator_registry" />
 
     <style>
+        /* ─── BREADCRUMB / HIERARCHY NAVIGATION ─── */
+        .creator-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--color-text-secondary, #9ea3b5);
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+
+        .creator-breadcrumb a {
+            color: var(--color-text-secondary, #9ea3b5);
+            text-decoration: none;
+            transition: color var(--transition-fast, 0.15s ease);
+        }
+
+        .creator-breadcrumb a:hover {
+            color: var(--color-accent, #e04652);
+        }
+
+        .creator-breadcrumb-sep {
+            color: var(--color-text-dim, #6c7184);
+            font-size: 12px;
+        }
+
+        .creator-breadcrumb-current {
+            color: var(--color-text, #f0f1f5);
+            font-weight: 600;
+        }
+
         /* ─── CREATOR SUB-NAVIGATION TABS ─── */
         .creator-nav-tabs {
             display: flex;
@@ -489,6 +520,17 @@
     </style>
 
     <div class="content-header">
+        <!-- Breadcrumb Navigation -->
+        <nav class="creator-breadcrumb" aria-label="Breadcrumb">
+            <a href="config">Settings</a>
+            <span class="creator-breadcrumb-sep">/</span>
+            <span>Metadata &amp; Identity</span>
+            <span class="creator-breadcrumb-sep">/</span>
+            <a href="creators">Creators</a>
+            <span class="creator-breadcrumb-sep">/</span>
+            <span class="creator-breadcrumb-current">Identity Registry</span>
+        </nav>
+
         <!-- Tab Navigation -->
         <div class="creator-nav-tabs">
             <a href="creators" class="creator-nav-tab">

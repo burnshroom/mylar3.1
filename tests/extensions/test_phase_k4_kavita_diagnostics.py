@@ -723,6 +723,40 @@ class TestPhaseK4KavitaDiagnosticsIntegration(unittest.TestCase):
             self.assertTrue(mylar.CONFIG.KAVITA_ENABLED, "Explicit key clear must preserve enabled status")
             self.assertEqual(mylar.CONFIG.KAVITA_URL, 'http://127.0.0.1:5000/', "Explicit key clear must preserve URL")
 
+    def test_25_modern_navigation_relocates_kavita_under_settings_integrations(self):
+        """25. Prove that Modern navigation relocates Kavita under Settings -> Integrations and Creators under Settings -> Metadata & Identity."""
+        # 1. Base template structure validation
+        base_tpl_path = os.path.join(REPO_ROOT, 'data', 'interfaces', 'modern', 'base.html')
+        with open(base_tpl_path, 'r', encoding='utf-8') as f:
+            base_content = f.read()
+
+        # Verify Library group does NOT have Creators
+        library_group = base_content.split('<div class="nav-group-title">Library</div>')[1].split('<div class="nav-group-title">Workspace</div>')[0]
+        self.assertNotIn('data-nav="creators"', library_group)
+
+        # Verify Settings group with nested Metadata & Identity and Integrations subgroups
+        self.assertIn('<div class="nav-group-title">Settings</div>', base_content)
+        self.assertIn('<div class="nav-subgroup">', base_content)
+        self.assertIn('<div class="nav-subgroup-title">Metadata &amp; Identity</div>', base_content)
+        self.assertIn('<a href="creators" class="nav-item nav-item--sub" data-nav="creators">', base_content)
+        self.assertIn('<div class="nav-subgroup-title">Integrations</div>', base_content)
+        self.assertIn('<a href="kavita_diagnostics" class="nav-item nav-item--sub" data-nav="kavita_diagnostics">', base_content)
+        self.assertIn('<span class="nav-label">Kavita</span>', base_content)
+
+        # 2. Rendered kavita_diagnostics page contains breadcrumbs and title
+        from mylar.webserve import WebInterface
+        interface = WebInterface()
+        mylar.CONFIG.INTERFACE = 'modern'
+        rendered_html = interface.kavita_diagnostics()
+
+        self.assertIn('<title>Mylar - Settings / Integrations / Kavita</title>', rendered_html)
+        self.assertIn('kavita-breadcrumb', rendered_html)
+        self.assertIn('href="config"', rendered_html)
+        self.assertIn('Settings', rendered_html)
+        self.assertIn('Integrations', rendered_html)
+        self.assertIn('kavita-breadcrumb-current', rendered_html)
+        self.assertIn('Kavita', rendered_html)
+
     def test_19_git_diff_check_clean(self):
         """19. Prove that git diff --check reports zero whitespace or newline errors."""
         res = subprocess.run(['git', 'diff', '--check'], cwd=REPO_ROOT, capture_output=True, text=True)

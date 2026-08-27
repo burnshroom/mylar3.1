@@ -1691,10 +1691,15 @@
                  type: "GET",
                  url: "markissues",
                  data: { action: action, issueids: checkboxesChecked },
+                 traditional: true,
                  success: function(response) {
-                    obj = JSON.parse(response);
-                    $('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-check'></span>"+obj['message']+"</div>");
-                    if (obj['status'] == 'success'){
+                    var obj = (typeof response === 'object') ? response : null;
+                    if (!obj) {
+                        try { obj = JSON.parse(response); } catch(e) {}
+                    }
+                    var msg = (obj && obj.message) ? obj.message : 'Status updated.';
+                    $('#ajaxMsg').html("<div class='msg'><span class='ui-icon ui-icon-check'></span>"+msg+"</div>");
+                    if (obj && obj.status == 'success'){
                         $('#ajaxMsg').addClass('success').fadeIn().delay(3000).fadeOut();
                     } else {
                         $('#ajaxMsg').addClass('error').fadeIn().delay(3000).fadeOut();

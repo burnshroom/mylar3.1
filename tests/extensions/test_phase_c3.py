@@ -237,6 +237,78 @@ class TestPhaseC3(unittest.TestCase):
         self.assertEqual(annuals_cnt, 1)
         self.assertEqual(comics_cnt, 2)
 
+    def test_10_modern_navigation_relocates_creators_to_settings_metadata_and_identity(self):
+        """Confirm Modern navigation relocates Creators under Settings -> Metadata & Identity with breadcrumbs and preserves series page actions."""
+        import mylar
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+        # 1. Base template structure validation
+        base_tpl_path = os.path.join(repo_root, 'data', 'interfaces', 'modern', 'base.html')
+        with open(base_tpl_path, 'r', encoding='utf-8') as f:
+            base_content = f.read()
+
+        # Confirm absent from Library and Workspace top-level
+        library_group = base_content.split('<div class="nav-group-title">Library</div>')[1].split('<div class="nav-group-title">Workspace</div>')[0]
+        self.assertNotIn('data-nav="creators"', library_group)
+
+        # Confirm present in Settings -> Metadata & Identity
+        self.assertIn('<div class="nav-subgroup-title">Metadata &amp; Identity</div>', base_content)
+        self.assertIn('<a href="creators" class="nav-item nav-item--sub" data-nav="creators">', base_content)
+
+        # 2. Render creators.html and verify breadcrumbs
+        from mylar.webserve import WebInterface
+        interface = WebInterface()
+
+        class MockConfig:
+            INTERFACE = 'modern'
+            HTTP_ROOT = ''
+            PULLNEW = 'no'
+            WANTED_TAB_OFF = False
+            INSTANCE_NAME = ''
+            AUTHENTICATION = 0
+            GIT_BRANCH = 'master'
+            CURRENT_VERSION = 'v1.0'
+            MYLAR_INSTANCE_ID = 'test'
+            MYLAR_INSTANCE_SLUG = 'test'
+            KAVITA_ENABLED = False
+            KAVITA_URL = ''
+            KAVITA_API_KEY = ''
+            CHECK_GITHUB = False
+            CHECK_GITHUB_INTERVAL = 360
+
+        orig_config = mylar.CONFIG
+        orig_data_dir = mylar.DATA_DIR
+        orig_prog_dir = mylar.PROG_DIR
+        try:
+            mylar.CONFIG = MockConfig()
+            mylar.DATA_DIR = self.test_dir
+            mylar.PROG_DIR = repo_root
+            shutil.copyfile(self.db_path, os.path.join(self.test_dir, 'mylar.db'))
+            rendered_catalog = interface.creators()
+            rendered_catalog_str = rendered_catalog.decode('utf-8') if isinstance(rendered_catalog, bytes) else str(rendered_catalog)
+            self.assertIn('<title>Mylar - Settings / Metadata & Identity / Creators</title>', rendered_catalog_str)
+            self.assertIn('creator-breadcrumb', rendered_catalog_str)
+            self.assertIn('Settings', rendered_catalog_str)
+            self.assertIn('Metadata &amp; Identity', rendered_catalog_str)
+
+            # 3. Render creator_registry.html and verify breadcrumbs
+            rendered_registry = interface.creator_registry()
+            rendered_registry_str = rendered_registry.decode('utf-8') if isinstance(rendered_registry, bytes) else str(rendered_registry)
+            self.assertIn('creator-breadcrumb', rendered_registry_str)
+            self.assertIn('Identity Registry', rendered_registry_str)
+        finally:
+            mylar.CONFIG = orig_config
+            mylar.DATA_DIR = orig_data_dir
+            mylar.PROG_DIR = orig_prog_dir
+
+        # 4. Verify series-page creator controls are intact
+        series_tpl_path = os.path.join(repo_root, 'data', 'interfaces', 'modern', 'comicdetails_update.html')
+        with open(series_tpl_path, 'r', encoding='utf-8') as f:
+            series_content = f.read()
+        self.assertIn('id="menu_link_index_creators"', series_content)
+        self.assertIn('id="creatorIndexModal"', series_content)
+        self.assertIn('inspector_credits_content', series_content)
+
 
 if __name__ == '__main__':
     unittest.main()

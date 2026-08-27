@@ -1,0 +1,656 @@
+<%inherit file="base.html"/>
+<%!
+    import mylar
+    from mylar.helpers import checked
+%>
+
+<%def name="headerIncludes()">
+</%def>
+
+<%def name="body()">
+    <input type="hidden" id="page_name" value="search_results" />
+    <input type="hidden" id="search_query" name="search_query" value="${query_id}" />
+
+    <div class="search-header-container">
+        <div class="search-title-wrap">
+            <h1 class="search-main-title">
+                <svg class="search-title-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <span>${'Story Arc Search Results' if search_type == 'story_arc' else 'Search Results'}</span>
+            </h1>
+            <p class="search-query-subtitle">Results for <span class="search-query-highlight">"${query}"</span></p>
+        </div>
+        <div class="search-legend-bar">
+            <div class="legend-badge legend-badge--monitored" title="Series currently in your watchlist/library">
+                <span class="legend-dot"></span>
+                <span>Monitored</span>
+            </div>
+            <div class="legend-badge legend-badge--print" title="Standard print comic series">
+                <span class="legend-dot"></span>
+                <span>Print</span>
+            </div>
+            <div class="legend-badge legend-badge--digital" title="Digital, TPB, GN, or Hardcover volume">
+                <span class="legend-dot"></span>
+                <span>Digital / TPB / GN / HC</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-table-card card">
+        <div class="search-toolbar">
+            <div class="search-toolbar-left">
+                %if search_type != 'story_arc':
+                <div class="search-filters-group" id="checkboxControls" name="checkboxControls">
+                    <label for="hide_already" class="search-checkbox-label">
+                        <input type="checkbox" name="hide_already" id="hide_already" class="search-checkbox" />
+                        <span>Hide in Library</span>
+                    </label>
+                    <label for="hide_tpb" class="search-checkbox-label">
+                        <input type="checkbox" name="hide_tpb" id="hide_tpb" class="search-checkbox" />
+                        <span>Hide TPB</span>
+                    </label>
+                </div>
+                %endif
+
+                <div class="search-batch-actions" id="markresult" style="display:none;">
+                    <span class="search-batch-label">Mark selected series as:</span>
+                    <select name="action" id="mark_results" class="search-select" onchange="mark_the_results()">
+                        <option disabled="disabled" selected="selected">Choose...</option>
+                        <option value="mass">Add Series</option>
+                    </select>
+                    <input type="hidden" value="Go" />
+                </div>
+            </div>
+
+            <!-- Dedicated child container inside toolbar for DataTables length & filter controls -->
+            <div class="search-toolbar-right" id="searchTableControls"></div>
+        </div>
+
+        <form action="mark_the_results" method="get" id="markresults" name="markresults">
+            <div class="table-responsive search-table-responsive">
+                <table class="display select modern-table" id="searchresults_table">
+                    <thead>
+                        <tr>
+                            <th id="select" class="col-select"><input type="checkbox" name="select_all" value="1" id="results-select-all" class="checkbox" /></th>
+                            <th id="name" class="col-name">Comic Name</th>
+                            <th id="publisher" class="col-publisher">Publisher</th>
+                            <th id="comicyear" class="col-year">Year</th>
+                            <th id="issues" class="col-issues">Issues</th>
+                            <th id="options" class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </div>
+</%def>
+
+<%def name="headIncludes()">
+    <link rel="stylesheet" type="text/css" href="interfaces/${interface}/css/data_table.css" />
+</%def>
+
+<%def name="javascriptIncludes()">
+    <script src="js/libs/jquery.dataTables.1.10.25.min.js"></script>
+    <script src="js/libs/full_numbers_no_ellipses.js"></script>
+    <script type="text/javascript">
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(str) {
+        return escapeHtml(str);
+    }
+
+    function count_checks(){
+        var checks = document.getElementsByName("comicid[]");
+        var cc = document.getElementById("markresult");
+        var checkfound = false;
+        for (var i=0; i<checks.length; i++) {
+            if (checks[i].checked) {
+                checkfound = true;
+                break;
+            }
+        }
+        if (checkfound){
+            cc.style.display = "inline-flex";
+        } else {
+            cc.style.display = "none";
+        }
+    }
+
+    function moreMore() {
+        var dots = document.getElementById("dots");
+        var moreText = document.getElementById("more");
+        var optText = document.getElementById("readMore");
+        if (dots && dots.style.display == "none"){
+            dots.style.display = "inline";
+            optText.innerHTML = " more";
+            moreText.style.display = "none";
+        } else if (dots) {
+            dots.style.display = "none";
+            optText.innerHTML = " less";
+            moreText.style.display = "inline";
+        }
+    }
+
+    function addstoryarc(arcid, query_id){
+        var spinner = document.getElementById("loading_spinner_" + arcid);
+        if (spinner) spinner.style.display = "inline-flex";
+        $.ajax({
+            type: "GET",
+            url: "addbyid",
+            data: { comicid: arcid, query_id: query_id },
+            success: function(response) {
+                try {
+                    var obj = (typeof response === 'object') ? response : JSON.parse(response);
+                    if (spinner) spinner.style.display = "none";
+                    window.location.href = "detailStoryArc?StoryArcID=" + encodeURIComponent(obj['StoryArcID']) + "&StoryArcName=" + encodeURIComponent(obj['StoryArcName'] || '') + "&CV_ArcID=" + encodeURIComponent(obj['CV_ArcID'] || '');
+                } catch(e) {
+                    if (spinner) spinner.style.display = "none";
+                }
+            },
+            error: function(data) {
+                if (spinner) spinner.style.display = "none";
+                alert('ERROR: ' + (data.responseText || 'Unable to add story arc.'));
+            }
+        });
+    }
+
+    var addingComics = {};
+
+    function addingComicMarkup(){
+        return '<span class="badge-adding"><span class="spinner-dot"></span>Adding comic</span>';
+    }
+
+    function markComicAdding(comicid){
+        addingComics[String(comicid)] = true;
+        var table = $('#searchresults_table').DataTable();
+
+        table.rows().every(function(){
+            var rowData = this.data();
+            if (rowData && String(rowData[0]) === String(comicid)) {
+                rowData[9] = 'Adding';
+                this.data(rowData);
+                if (this.child.isShown()) {
+                    this.child.hide();
+                }
+                var rowNode = this.node();
+                $(rowNode).removeClass('shown gradeY');
+                $('td:last', rowNode).html(addingComicMarkup());
+            }
+        });
+    }
+
+    function addseries(comicid){
+        var query_id = retrieve_searchquery();
+        var location_input = document.getElementById("com_location_" + comicid);
+        var booktype_input = document.getElementById("booktype_" + comicid);
+        var com_location = location_input ? location_input.value : null;
+        var booktype = booktype_input ? booktype_input.value : null;
+
+        if (addingComics[String(comicid)]) {
+            return false;
+        }
+
+        var addLink = $('#addbyid_' + comicid);
+        var spinner = $('#loading_spinner_' + comicid);
+        addLink.attr('aria-disabled', 'true').css('pointer-events', 'none').addClass('btn-disabled');
+        spinner.show();
+
+        return $.ajax({
+            type: "GET",
+            url: "addbyid",
+            dataType: "json",
+            data: { comicid: comicid, query_id: query_id, com_location: com_location, booktype: booktype },
+        }).done(function(response) {
+            if (response && response.status === 'success') {
+                markComicAdding(comicid);
+            } else {
+                alert('ERROR: ' + ((response && response.message) || 'Unable to queue this comic.'));
+            }
+        }).fail(function(data) {
+            alert('ERROR: ' + (data.responseText || 'Unable to queue this comic.'));
+        }).always(function() {
+            spinner.hide();
+            if (!addingComics[String(comicid)]) {
+                addLink.removeAttr('aria-disabled').css('pointer-events', '').removeClass('btn-disabled');
+            }
+        });
+    }
+
+    // Delegated click handler on table actions
+    $('#searchresults_table').on('click', 'a', function(e) {
+        var action = this.id;
+        if (!action){
+            return;
+        }
+        if (action === 'extend_detail' || action.startsWith('addbyid') || action.startsWith('addbyarcid')) {
+            e.preventDefault();
+        }
+        if (action === 'edit_add'){
+            // handled via editor
+        } else {
+            var dataline = $('#searchresults_table').DataTable().row($(this).closest('tr')).data();
+            if (!dataline) return;
+            var comicid = dataline[0];
+            var query_id = retrieve_searchquery();
+
+            if (action.startsWith('addbyid')) {
+                addseries(comicid);
+            } else if (action.startsWith('addbyarcid')) {
+                addstoryarc(comicid, query_id);
+            } else if (action === 'extend_detail'){
+                var table = $('#searchresults_table').DataTable();
+                var tr = $(this).closest('tr');
+                var row = table.row( tr );
+
+                if ( row.child.isShown() ) {
+                    var addBtn = document.getElementById("addbyid_" + comicid);
+                    if (addBtn) addBtn.style.display = "inline-flex";
+                    row.child.hide();
+                    tr.removeClass('shown gradeY');
+                } else {
+                    tr.addClass("gradeY");
+                    var addBtn = document.getElementById("addbyid_" + comicid);
+                    if (addBtn) addBtn.style.display = "none";
+                    var spinner = document.getElementById("loading_spinner_" + comicid);
+                    if (spinner) spinner.style.display = "inline-flex";
+
+                    var cv = editTHEResults(comicid, null, null, query_id);
+                    cv.done(function(data){
+                        var dc = (typeof data === 'object') ? data : JSON.parse(data);
+                        var cdescription;
+                        var rawDesc = dc.description || '';
+                        if (rawDesc === 'None' || !rawDesc){
+                            cdescription = 'No description available';
+                        } else {
+                            var firstChunk = rawDesc.length > 300 ? rawDesc.substring(0, 300) : rawDesc;
+                            var moreChunk = rawDesc.length > 300 ? rawDesc.substring(300, 700) : '';
+                            var escapedFirst = escapeHtml(firstChunk).replace(/\r\n|\r|\n/g, '<br>');
+                            if (moreChunk) {
+                                var escapedMore = escapeHtml(moreChunk).replace(/\r\n|\r|\n/g, '<br>');
+                                cdescription = escapedFirst + '<span id="dots">...</span><span id="more" style="display:none;">' + escapedMore + '</span><a href="#" onclick="moreMore(); return false;" class="search-read-more" id="readMore"> more</a>';
+                            } else {
+                                cdescription = escapedFirst;
+                            }
+                        }
+
+                        var dropdown = "<select name='booktype' id='booktype_" + escapeAttr(comicid) + "' class='search-detail-select'>" +
+                           "<option value='Print' selected='selected'>Print</option>" +
+                           "<option value='TPB'>TPB</option>" +
+                           "<option value='HC'>HC</option>" +
+                           "<option value='GN'>GN</option>" +
+                           "<option value='One-Shot'>One-Shot</option>" +
+                           "<option value='Digital'>Digital</option>" +
+                           "</select>";
+
+                        var imgHtml = dc.image ? '<img src="data:image/jpeg;base64,' + escapeAttr(dc.image) + '" class="search-detail-img" alt="Cover" />' : '<div class="search-detail-no-img">No Image</div>';
+
+                        var the_line = '<div class="search-detail-expanded">' +
+                            '<div class="search-detail-grid">' +
+                                '<div class="search-detail-thumb">' + imgHtml + '</div>' +
+                                '<div class="search-detail-info">' +
+                                    '<div class="search-detail-desc">' + cdescription + '</div>' +
+                                    '<div class="search-detail-form">' +
+                                        '<div class="search-detail-field-location">' +
+                                            '<label class="search-detail-label">Comic Location:</label>' +
+                                            '<input type="text" id="com_location_' + escapeAttr(comicid) + '" name="com_location" class="search-detail-input" value="' + escapeAttr(dc.comlocation || '') + '" />' +
+                                        '</div>' +
+                                        '<div class="search-detail-field-type">' +
+                                            '<label class="search-detail-label">Book Type:</label>' +
+                                            dropdown +
+                                        '</div>' +
+                                        '<div class="search-detail-buttons">' +
+                                            '<button type="button" id="regenerate_location_' + escapeAttr(comicid) + '" class="btn-action-edit" title="Regenerate directory value using new values">' +
+                                                '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6M15 12V6H9M14 9A6 6 0 0 0 3.6 4.6L1 7M2 7a6 6 0 0 0 10.4 4.4L15 9"/></svg>' +
+                                                '<span>Regenerate</span>' +
+                                            '</button>' +
+                                            '<button type="button" id="add_series_' + escapeAttr(comicid) + '" class="btn-action-add">' +
+                                                '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3" x2="8" y2="13"></line><line x1="3" y1="8" x2="13" y2="8"></line></svg>' +
+                                                '<span>Add</span>' +
+                                            '</button>' +
+                                        '</div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>';
+
+                        row.child( the_line ).show();
+                        tr.addClass('shown');
+                        drop_the_down(dc.booktype, comicid);
+
+                        var addBtnEl = document.getElementById("add_series_" + comicid);
+                        if (addBtnEl) {
+                            addBtnEl.onclick = function() {
+                                return addseries(comicid);
+                            };
+                        }
+                        var regenBtnEl = document.getElementById("regenerate_location_" + comicid);
+                        if (regenBtnEl) {
+                            regenBtnEl.onclick = function() {
+                                return regenerate_location(comicid);
+                            };
+                        }
+                        var bktypeEl = document.getElementById("booktype_" + comicid);
+                        if (bktypeEl) {
+                            bktypeEl.onchange = function() {
+                                return regenerate_location(comicid);
+                            };
+                        }
+                        if (spinner) spinner.style.display = "none";
+                    });
+                }
+            }
+        }
+    });
+
+    function regenerate_location(comicid){
+        var location = document.getElementById("com_location_" + comicid);
+        var bktype = document.getElementById("booktype_" + comicid);
+        var query_id = retrieve_searchquery();
+
+        var boomers = editTHEResults(comicid, null, bktype ? bktype.value : null, query_id, true);
+        boomers.done(function(data){
+            var dc = (typeof data === 'object') ? data : JSON.parse(data);
+            if (location) location.value = dc.comlocation;
+        });
+        return false;
+    }
+
+    function drop_the_down(booktype, comicid) {
+        var mySelect = document.getElementById("booktype_" + comicid);
+        if (!mySelect) return;
+        for(var i = 0; i < mySelect.options.length; i++) {
+            if(mySelect.options[i].value == booktype) {
+                mySelect.selectedIndex = i;
+                break;
+            }
+        }
+    }
+
+    function editTHEResults(comicid, location, booktype, query_id, imageloaded){
+        return $.ajax({
+            type: "GET",
+            url: "editDetails",
+            data: { comicid: comicid, location: location, booktype: booktype, query_id: query_id, imageloaded: imageloaded }
+        });
+    }
+
+    function retrieve_searchquery() {
+        var el = document.getElementById("search_query");
+        return el ? el.value : "";
+    }
+
+    function mark_the_results(){
+        var action = $("#mark_results option:selected").val();
+        var checks = document.getElementsByName("comicid[]");
+        var query_id = retrieve_searchquery();
+        var checkboxesChecked = [];
+        for (var i=0; i<checks.length; i++) {
+            if (checks[i].checked) {
+                checkboxesChecked.push(checks[i].value);
+            }
+        }
+        if (!checkboxesChecked.length) return;
+        $.ajax({
+            type: "GET",
+            url: "markseries",
+            data: { action: action, serieslist: checkboxesChecked, query_id: query_id },
+            success: function(response) {
+                var table = $('#searchresults_table').DataTable();
+                table.ajax.reload();
+            },
+            error: function(data) {
+                alert('ERROR: ' + (data.responseText || 'Unable to update series.'));
+            }
+        });
+    }
+
+    function relocateToolbarControls() {
+        var targetContainer = $('#searchTableControls');
+        var lengthCtrl = $('#searchresults_table_length');
+        var filterCtrl = $('#searchresults_table_filter');
+        if (targetContainer.length) {
+            if (lengthCtrl.length && !$.contains(targetContainer[0], lengthCtrl[0])) {
+                lengthCtrl.appendTo(targetContainer);
+            }
+            if (filterCtrl.length && !$.contains(targetContainer[0], filterCtrl[0])) {
+                filterCtrl.appendTo(targetContainer);
+            }
+        }
+    }
+
+    var lastChecked = null;
+    var pageScrollPos = 0;
+
+    function initThisPage(){
+        var search_type = "${search_type}";
+        $.fn.DataTable.ext.pager.numbers_length = 3;
+
+        $('#searchresults_table').dataTable({
+            "preDrawCallback": function (settings){
+                pageScrollPos = $('#searchresults_table div.dataTables_scrollBody').scrollTop();
+                var dropdown = document.getElementById("mark_results");
+                if (dropdown) dropdown.selectedIndex = 0;
+                var markBox = document.getElementById("markresult");
+                if (markBox) markBox.style.display = "none";
+                var selectAll = document.getElementById("results-select-all");
+                if (selectAll) selectAll.checked = false;
+            },
+            "sDom": '<"dataTables_header"lf><"table-responsive"rt><"dataTables_footer"ip>',
+            "destroy": true,
+            "processing": true,
+            "serverSide": true,
+            "ajax": {
+                "data": function (d) {
+                    d.query = retrieve_searchquery();
+                }
+            },
+            "ajaxSource": "loadSearchResults",
+            "columnDefs": [
+               {
+                   "sortable": false,
+                   "targets": [0],
+                   "visible": true,
+                   "render": function (data, type, full, meta){
+                      return '<input type="checkbox" name="comicid[]" value="' + escapeAttr(full[0]) + '" class="search-row-checkbox" />';
+                   },
+               },
+               {
+                   "sortable": true,
+                   "targets": [1],
+                   "visible": true,
+                   "render": function (data, type, full){
+                       var booktype = '';
+                       var rawBooktype = full[7] || '';
+                       if (rawBooktype && rawBooktype !== "Print"){
+                           booktype = '<span class="chip-format chip-format--' + escapeAttr(rawBooktype.toLowerCase()) + '">' + escapeHtml(rawBooktype) + '</span>';
+                       }
+                       var titleStr = full[1] || '';
+                       var displayTitle = titleStr.length > 65 ? titleStr.substring(0, 62) + '...' : titleStr;
+                       var urlStr = full[6] || '#';
+                       return '<div class="search-title-cell"><a href="' + escapeAttr(urlStr) + '" target="_blank" rel="noopener noreferrer" class="search-comic-link" title="' + escapeAttr(titleStr) + '">' + escapeHtml(displayTitle) + '</a>' + booktype + '</div>';
+                   }
+               },
+               {
+                   "sortable": true,
+                   "targets": [2],
+                   "visible": true,
+                   "render": function (data, type, full){
+                       return '<span class="cell-publisher">' + escapeHtml(full[2] || '') + '</span>';
+                   }
+               },
+               {
+                   "sortable": true,
+                   "targets": [3],
+                   "visible": true,
+                   "render": function (data, type, full){
+                       return '<span class="cell-year">' + escapeHtml(full[3] || '') + '</span>';
+                   }
+               },
+               {
+                   "sortable": true,
+                   "targets": [4],
+                   "visible": true,
+                   "render": function (data, type, full){
+                       return '<span class="cell-issues">' + escapeHtml(full[4] || '0') + '</span>';
+                   }
+               },
+               {
+                   "sortable": false,
+                   "targets": [5],
+                   "visible": true,
+                   "render": function (data, type, full){
+                       var displayline = '';
+                       if (search_type === "story_arc"){
+                           if (full[9] === "No") {
+                               displayline = '<div class="search-action-group">' +
+                                   '<a id="addbyarcid_' + escapeAttr(full[0]) + '" name="addbyarcid" href="#" class="btn-action-add" title="Add this StoryArc">' +
+                                       '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3" x2="8" y2="13"></line><line x1="3" y1="8" x2="13" y2="8"></line></svg>' +
+                                       '<span>Add StoryArc</span>' +
+                                   '</a>' +
+                                   '<span id="loading_spinner_' + escapeAttr(full[0]) + '" class="action-spinner" style="display:none;"><span class="spinner-dot"></span></span>' +
+                               '</div>';
+                           } else {
+                               displayline = '<a id="alreadyhave" name="alreadyhave" href="detailStoryArc?StoryArcID=' + encodeURIComponent(full[0]) + '&StoryArcName=' + encodeURIComponent(full[1] || '') + '" class="btn-action-in-library">' +
+                                   '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5l-7 7-3-3"></path></svg>' +
+                                   '<span>In Library</span>' +
+                               '</a>';
+                           }
+                       } else {
+                           if (full[9] === "Yes") {
+                               delete addingComics[String(full[0])];
+                               displayline = '<a id="alreadyhave" name="alreadyhave" href="comicDetails?ComicID=' + encodeURIComponent(full[0]) + '" class="btn-action-in-library">' +
+                                   '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5l-7 7-3-3"></path></svg>' +
+                                   '<span>In Library</span>' +
+                               '</a>';
+                           } else if (full[9] === "Adding" || addingComics[String(full[0])]) {
+                               displayline = addingComicMarkup();
+                           } else {
+                               displayline = '<div class="search-action-group">' +
+                                   '<a id="extend_detail" name="extend_detail" href="#" class="btn-action-edit" title="Edit location & format">' +
+                                       '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2l3 3L5 14H2v-3L11 2z"></path></svg>' +
+                                       '<span>Edit</span>' +
+                                   '</a>' +
+                                   '<a id="addbyid_' + escapeAttr(full[0]) + '" name="addbyid" href="#" class="btn-action-add" title="Add this Comic">' +
+                                       '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="3" x2="8" y2="13"></line><line x1="3" y1="8" x2="13" y2="8"></line></svg>' +
+                                       '<span>Add this Comic</span>' +
+                                   '</a>' +
+                                   '<span id="loading_spinner_' + escapeAttr(full[0]) + '" class="action-spinner" style="display:none;"><span class="spinner-dot"></span></span>' +
+                               '</div>';
+                           }
+                       }
+                       return displayline;
+                   }
+               }
+            ],
+            "paginationType": "simple_numbers",
+            "aaSorting": [[3, 'desc']],
+            "displayLength": 25,
+            "lengthMenu": [[10, 15, 25, 50, 100, 200, -1], [10, 15, 25, 50, 100, 200, 'All']],
+            "language": {
+                 "search": "Filter:",
+                 "lengthMenu": "Show _MENU_ issues per page",
+                 "emptyTable": "No search results found",
+                 "info": "Showing _START_ to _END_ of _TOTAL_ issues",
+                 "infoEmpty": "Showing 0 to 0 of 0 issues",
+                 "infoFiltered": "(filtered from _MAX_ total issues)"
+            },
+            "rowCallback": function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
+                var inLibrary = aData[9] === "Yes";
+                if (aData[7] === "Digital" || aData[7] === "TPB" || aData[7] === "GN" || aData[7] === "HC") {
+                    if (inLibrary) {
+                        $('td', nRow).closest('tr').addClass("gradeH");
+                    } else {
+                        $('td', nRow).closest('tr').addClass("gradeZ");
+                    }
+                } else {
+                    if (inLibrary) {
+                        $('td', nRow).closest('tr').addClass("gradeH");
+                    } else {
+                        $('td', nRow).closest('tr').addClass("gradeB");
+                    }
+                }
+                if (nRow.children.length > 0) nRow.children[0].id = 'select';
+                if (nRow.children.length > 1) nRow.children[1].id = 'name';
+                if (nRow.children.length > 2) nRow.children[2].id = 'publisher';
+                if (nRow.children.length > 3) nRow.children[3].id = 'comicyear';
+                if (nRow.children.length > 4) nRow.children[4].id = 'issues';
+                if (nRow.children.length > 5) nRow.children[5].id = 'options';
+                return nRow;
+            },
+            "drawCallback": function (settings) {
+                $('#searchresults_table div.dataTables_scrollBody').scrollTop(pageScrollPos);
+                relocateToolbarControls();
+            },
+            "fnInitComplete": function (oSettings, json) {
+                relocateToolbarControls();
+            },
+            "serverData": function (sSource, aoData, fnCallback) {
+                aoData.push({"name": "search_query", "value": retrieve_searchquery()});
+                aoData.push({"name": "hide_already", "value": $('#hide_already').is(':checked') ? "1" : "0"});
+                aoData.push({"name": "hide_tpb", "value": $('#hide_tpb').is(':checked') ? "1" : "0"});
+                $.getJSON(sSource, aoData, function (json) {
+                    fnCallback(json);
+                });
+            }
+        });
+
+        relocateToolbarControls();
+
+        $('#searchresults_table tbody').on('click', 'input[type="checkbox"]', function(e){
+            var chkboxes = Array.from($(":checkbox"));
+            if (!lastChecked) {
+                lastChecked = this;
+            } else {
+                if (e.shiftKey) {
+                    var start = chkboxes.indexOf(lastChecked);
+                    var end = chkboxes.indexOf(this);
+                    var positive = start < end;
+                    for (var i = (positive ? start : end); (positive ? i <= end : i <= start); i++) {
+                        chkboxes[i].checked = lastChecked.checked;
+                    }
+                    lastChecked = null;
+                } else {
+                    lastChecked = this;
+                }
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        initThisPage();
+        var tables = $('#searchresults_table').DataTable();
+
+        $(document).on("change", '#checkboxControls input[type="checkbox"]', function() {
+            tables.ajax.reload();
+        });
+
+        $('#results-select-all').on('click', function(){
+            var rows = tables.rows({ 'search': 'applied' }).nodes();
+            $('input[type="checkbox"]', rows).prop('checked', this.checked);
+            count_checks();
+        });
+
+        $('#searchresults_table tbody').on('change', 'input[type="checkbox"]', function(){
+            count_checks();
+            if(!this.checked){
+                var el = $('#results-select-all').get(0);
+                if(el && el.checked && ('indeterminate' in el)){
+                    el.indeterminate = true;
+                }
+            }
+        });
+    });
+    </script>
+</%def>

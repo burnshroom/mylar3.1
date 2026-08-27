@@ -40,7 +40,7 @@ def handle_creator_catalog(search=None, role=None, sort='name_asc', page=1, page
     if serve_template_fn:
         return serve_template_fn(
             templatename="creators.html",
-            title="Creator Credits",
+            title="Settings / Metadata & Identity / Creators",
             catalog=catalog,
             roles=ROLES,
             search=search or '',

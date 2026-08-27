@@ -676,6 +676,7 @@ class KavitaPublisherService:
             )
 
             # Queue scan for newly associated library if budget allows
+            scan_queued = False
             if time.monotonic() + MIN_STEP_BUDGET < deadline:
                 rem = deadline - time.monotonic()
                 try:
@@ -684,13 +685,14 @@ class KavitaPublisherService:
                         timeout_override=(min(5.0, rem), min(10.0, rem))
                     )
                     self._record_active_scan_success(mapping_id)
+                    scan_queued = True
                 except KavitaError as scan_err:
                     scan_code = getattr(scan_err, 'error_code', 'kavita_scan_rejected')
                     self._record_active_scan_failure(mapping_id, scan_code, now, 0)
             else:
                 self._record_active_scan_failure(mapping_id, 'kavita_timeout', now, 0)
 
-            return {'status': 'associated_existing', 'library_id': matched_id}
+            return {'status': 'associated_existing', 'library_id': matched_id, 'scan_queued': scan_queued}
 
         # Case B2: Multiple Exact Paths (Terminal Ambiguity)
         if len(exact_matches) > 1:
@@ -792,6 +794,7 @@ class KavitaPublisherService:
             )
 
             # Queue initial scan if budget allows
+            scan_queued = False
             if time.monotonic() + MIN_STEP_BUDGET < deadline:
                 rem = deadline - time.monotonic()
                 try:
@@ -800,13 +803,14 @@ class KavitaPublisherService:
                         timeout_override=(min(5.0, rem), min(10.0, rem))
                     )
                     self._record_active_scan_success(mapping_id)
+                    scan_queued = True
                 except KavitaError as scan_err:
                     scan_code = getattr(scan_err, 'error_code', 'kavita_scan_rejected')
                     self._record_active_scan_failure(mapping_id, scan_code, now, 0)
             else:
                 self._record_active_scan_failure(mapping_id, 'kavita_timeout', now, 0)
 
-            return {'status': 'created', 'library_id': new_lib_id}
+            return {'status': 'created', 'library_id': new_lib_id, 'scan_queued': scan_queued}
 
         # Post-Failure Collision / Crash Recovery
         if time.monotonic() + MIN_STEP_BUDGET < deadline:

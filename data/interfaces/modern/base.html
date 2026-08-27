@@ -128,15 +128,6 @@
                             </svg>
                             <span class="nav-label">Story Arcs</span>
                         </a>
-                        <a href="creators" class="nav-item" data-nav="creators">
-                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12.5 15.5v-1a3 3 0 0 0-3-3h-3a3 3 0 0 0-3 3v1"></path>
-                                <circle cx="8" cy="5.5" r="2.5"></circle>
-                                <path d="M15.5 15.5v-1a2.5 2.5 0 0 0-2-2.45"></path>
-                                <path d="M12 3.1a2.5 2.5 0 0 1 0 4.8"></path>
-                            </svg>
-                            <span class="nav-label">Creators</span>
-                        </a>
                     </div>
 
                     <div class="nav-group">
@@ -157,6 +148,10 @@
                             </svg>
                             <span class="nav-label">Manage</span>
                         </a>
+                    </div>
+
+                    <div class="nav-group">
+                        <div class="nav-group-title">Settings</div>
                         <a href="config" class="nav-item config" data-nav="config">
                             <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="9" cy="9" r="2.5"></circle>
@@ -164,13 +159,28 @@
                             </svg>
                             <span class="nav-label">Settings</span>
                         </a>
-                        <a href="kavita_diagnostics" class="nav-item" data-nav="kavita_diagnostics">
-                            <svg class="nav-icon" viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 4.5h12M3 8.5h12M3 12.5h6"></path>
-                                <circle cx="13.5" cy="12.5" r="2.5"></circle>
-                            </svg>
-                            <span class="nav-label">Kavita Integration</span>
-                        </a>
+                        <div class="nav-subgroup">
+                            <div class="nav-subgroup-title">Metadata &amp; Identity</div>
+                            <a href="creators" class="nav-item nav-item--sub" data-nav="creators">
+                                <svg class="nav-icon" viewBox="0 0 18 18" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12.5 15.5v-1a3 3 0 0 0-3-3h-3a3 3 0 0 0-3 3v1"></path>
+                                    <circle cx="8" cy="5.5" r="2.5"></circle>
+                                    <path d="M15.5 15.5v-1a2.5 2.5 0 0 0-2-2.45"></path>
+                                    <path d="M12 3.1a2.5 2.5 0 0 1 0 4.8"></path>
+                                </svg>
+                                <span class="nav-label">Creators</span>
+                            </a>
+                        </div>
+                        <div class="nav-subgroup">
+                            <div class="nav-subgroup-title">Integrations</div>
+                            <a href="kavita_diagnostics" class="nav-item nav-item--sub" data-nav="kavita_diagnostics">
+                                <svg class="nav-icon" viewBox="0 0 18 18" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 4.5h12M3 8.5h12M3 12.5h6"></path>
+                                    <circle cx="13.5" cy="12.5" r="2.5"></circle>
+                                </svg>
+                                <span class="nav-label">Kavita</span>
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -353,7 +363,7 @@
         //    };
         //}
 
-        //setupEventSource();
+        % if sse_key and sse_key != 'None' and sse_key != '':
         var sse_key = "${sse_key}";
         var api_line = "api?cmd=checkGlobalMessages&apikey="+sse_key;
         const evtSource = new EventSource(api_line)
@@ -532,6 +542,7 @@
                 }
             }
         }, false);
+        % endif
 
         function retrieve_comicid() {
             try {
@@ -939,13 +950,14 @@
                 var navTarget = $(this).attr("data-nav") || $(this).attr("href");
                 if (navTarget === path || 
                     ((path === 'storyarc_main' || path === 'detailStoryArc') && navTarget === 'storyarcs') ||
-                    ((path === 'creators' || path === 'creator_detail') && navTarget === 'creators') ||
+                    ((path === 'creators' || path === 'creator_detail' || path === 'creator_registry') && navTarget === 'creators') ||
                     (pageName && (navTarget === pageName || 
                     (pageName === 'index' && navTarget === 'home') || 
                     (pageName === 'weekly' && navTarget === 'pullist') || 
                     (pageName === 'manage_comics' && navTarget === 'manageComics') ||
                     (pageName === 'storyarc' && navTarget === 'storyarcs') ||
                     (pageName === 'creators' && navTarget === 'creators') ||
+                    (pageName === 'creator_registry' && navTarget === 'creators') ||
                     (pageName === 'kavita_diagnostics' && navTarget === 'kavita_diagnostics') ||
                     (pageName === 'creator_detail' && navTarget === 'creators')))) {
                     $(this).addClass("active");
